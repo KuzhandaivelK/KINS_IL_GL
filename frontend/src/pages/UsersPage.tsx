@@ -507,6 +507,22 @@ export const UsersPage: React.FC = () => {
                     className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy/20 focus:bg-white"
                   />
                 </div>
+                {/* USER_GROUP field */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-main mb-1">
+                    User Group (Oracle USER_GROUP)
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="e.g. ADMIN, SALES, UNDERWRITING"
+                      value={formData.userGroup}
+                      onChange={(e) => setFormData({ ...formData, userGroup: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy/20 focus:bg-white"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -658,6 +674,22 @@ export const UsersPage: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy/20 focus:bg-white"
                 />
+                {/* USER_GROUP field */}
+                <div className="mt-3">
+                  <label className="block text-xs font-semibold text-text-main mb-1">
+                    User Group (Oracle USER_GROUP)
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="e.g. ADMIN, SALES, UNDERWRITING"
+                      value={formData.userGroup}
+                      onChange={(e) => setFormData({ ...formData, userGroup: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy/20 focus:bg-white"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="p-3 rounded-lg bg-amber-50/70 border border-amber-200 text-amber-900 text-xs space-y-2">

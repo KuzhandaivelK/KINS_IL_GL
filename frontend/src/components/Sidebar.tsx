@@ -80,7 +80,8 @@ const defaultFallbackMenus: MenuListItem[] = [
     IS_ACTIVE: 'Y',
     children: [
       { MENU_ID: 'USER_MANAGEMENT', MENU_NAME: 'User Management', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 1, MENU_PATH: '/administration/users', MENU_ICON: 'UserCog', IS_ACTIVE: 'Y' },
-      { MENU_ID: 'MENU_MANAGEMENT', MENU_NAME: 'Menu Setup', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 2, MENU_PATH: '/administration/menus', MENU_ICON: 'Menu', IS_ACTIVE: 'Y' }
+      { MENU_ID: 'MENU_MANAGEMENT', MENU_NAME: 'Menu Setup', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 2, MENU_PATH: '/administration/menus', MENU_ICON: 'Menu', IS_ACTIVE: 'Y' },
+      { MENU_ID: 'CUSTOMER_MANAGEMENT', MENU_NAME: 'Customers', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 3, MENU_PATH: '/administration/customers', MENU_ICON: 'Folder', IS_ACTIVE: 'Y' }
     ]
   }
 ];
