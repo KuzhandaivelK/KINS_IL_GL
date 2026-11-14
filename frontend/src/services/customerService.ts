@@ -4,14 +4,26 @@ import { CreateCustomerInput, UpdateCustomerInput } from '../types/customer';
 
 const API_BASE_URL = '/api';
 
+async function parseResponse(response: Response) {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return await response.json();
+  }
+  const text = await response.text();
+  return {
+    success: false,
+    message: response.ok ? text : `Server error (${response.status}): ${response.statusText || text.slice(0, 100)}`
+  };
+}
+
 export const customerService = {
   async getCustomers(search?: string): Promise<{ success: boolean; customers: any[]; message?: string }> {
     try {
       const url = search ? `${API_BASE_URL}/customers?search=${encodeURIComponent(search)}` : `${API_BASE_URL}/customers`;
       const response = await fetch(url, { method: 'GET', credentials: 'include' });
-      const data = await response.json();
+      const data = await parseResponse(response);
       if (response.ok && data.success) {
-        return { success: true, customers: data.data.customers };
+        return { success: true, customers: data.data?.customers || [] };
       }
       return { success: false, customers: [], message: data.message || 'Failed to fetch customers' };
     } catch (err: any) {
@@ -27,9 +39,9 @@ export const customerService = {
         credentials: 'include',
         body: JSON.stringify(input)
       });
-      const data = await response.json();
+      const data = await parseResponse(response);
       if (response.ok && data.success) {
-        return { success: true, customer: data.data.customer, message: data.message };
+        return { success: true, customer: data.data?.customer, message: data.message };
       }
       return { success: false, message: data.message || 'Failed to create customer' };
     } catch (err: any) {
@@ -45,9 +57,9 @@ export const customerService = {
         credentials: 'include',
         body: JSON.stringify(input)
       });
-      const data = await response.json();
+      const data = await parseResponse(response);
       if (response.ok && data.success) {
-        return { success: true, customer: data.data.customer, message: data.message };
+        return { success: true, customer: data.data?.customer, message: data.message };
       }
       return { success: false, message: data.message || 'Failed to update customer' };
     } catch (err: any) {
@@ -61,7 +73,7 @@ export const customerService = {
         method: 'DELETE',
         credentials: 'include'
       });
-      const data = await response.json();
+      const data = await parseResponse(response);
       if (response.ok && data.success) {
         return { success: true, message: data.message };
       }

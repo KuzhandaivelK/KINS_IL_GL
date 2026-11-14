@@ -6,6 +6,8 @@ import { env } from './config/env';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import menuRoutes from './routes/menuRoutes';
+import customerRoutes from './routes/customerRoutes';
+import tariffRoutes from './routes/tariffRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -39,6 +41,8 @@ app.use((req, _res, next) => {
 app.use('/api', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/menus', menuRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/tariff', tariffRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

@@ -11,6 +11,7 @@ import { PlaceholderModulePage } from './pages/PlaceholderModulePage';
 import { UsersPage } from './pages/UsersPage';
 import { MenusPage } from './pages/MenusPage';
 import { CustomersPage } from './pages/CustomersPage';
+import { TariffRatesPage } from './pages/TariffRatesPage';
 
 export const App: React.FC = () => {
   return (
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
             <Route path="/administration/users" element={<UsersPage />} />
             <Route path="/administration/menus" element={<MenusPage />} />
             <Route path="/administration/customers" element={<CustomersPage />} />
+            <Route path="/administration/rating" element={<TariffRatesPage />} />
           </Route>
 
           {/* Root Redirect to /dashboard (which redirects to /login if unauthenticated) */}

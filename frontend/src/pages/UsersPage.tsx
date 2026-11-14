@@ -42,6 +42,7 @@ export const UsersPage: React.FC = () => {
     password: string;
     confirmPassword: string;
     description: string;
+    userGroup?: string;
     disableFlag: 'Y' | 'N';
   }>({
     userId: '',
@@ -49,6 +50,7 @@ export const UsersPage: React.FC = () => {
     password: '',
     confirmPassword: '',
     description: '',
+    userGroup: '',
     disableFlag: 'N'
   });
 
@@ -86,6 +88,7 @@ export const UsersPage: React.FC = () => {
       password: '',
       confirmPassword: '',
       description: '',
+      userGroup: '',
       disableFlag: 'N'
     });
     setErrorMsg(null);
@@ -100,6 +103,7 @@ export const UsersPage: React.FC = () => {
       password: '',
       confirmPassword: '',
       description: user.description || '',
+      userGroup: '',
       disableFlag: user.disableFlag
     });
     setErrorMsg(null);
