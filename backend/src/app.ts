@@ -8,6 +8,7 @@ import userRoutes from './routes/userRoutes';
 import menuRoutes from './routes/menuRoutes';
 import customerRoutes from './routes/customerRoutes';
 import tariffRoutes from './routes/tariffRoutes';
+import coverRoutes from './routes/coverRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -43,6 +44,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/tariff', tariffRoutes);
+app.use('/api/covers', coverRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

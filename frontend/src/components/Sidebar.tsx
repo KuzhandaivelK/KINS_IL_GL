@@ -62,7 +62,26 @@ const defaultFallbackMenus: MenuListItem[] = [
   { MENU_ID: 'DASHBOARD', MENU_NAME: 'Dashboard', MENU_PARENT_ID: null, MENU_SEQ_NO: 1, MENU_PATH: '/dashboard', MENU_ICON: 'LayoutDashboard', IS_ACTIVE: 'Y' },
   { MENU_ID: 'INDIVIDUAL_LIFE', MENU_NAME: 'Individual Life', MENU_PARENT_ID: null, MENU_SEQ_NO: 2, MENU_PATH: '/individual-life', MENU_ICON: 'UserCheck', IS_ACTIVE: 'Y' },
   { MENU_ID: 'GROUP_LIFE', MENU_NAME: 'Group Life', MENU_PARENT_ID: null, MENU_SEQ_NO: 3, MENU_PATH: '/group-life', MENU_ICON: 'Users', IS_ACTIVE: 'Y' },
-  { MENU_ID: 'PRODUCT_CONFIG', MENU_NAME: 'Product Configuration', MENU_PARENT_ID: null, MENU_SEQ_NO: 4, MENU_PATH: '/product-configuration', MENU_ICON: 'Settings2', IS_ACTIVE: 'Y' },
+  {
+    MENU_ID: 'PRODUCT_CONFIG',
+    MENU_NAME: 'Product Configuration',
+    MENU_PARENT_ID: null,
+    MENU_SEQ_NO: 4,
+    MENU_PATH: '/product-configuration',
+    MENU_ICON: 'Settings2',
+    IS_ACTIVE: 'Y',
+    children: [
+      {
+        MENU_ID: 'COVER',
+        MENU_NAME: 'Cover Config',
+        MENU_PARENT_ID: 'PRODUCT_CONFIG',
+        MENU_SEQ_NO: 1,
+        MENU_PATH: '/product-configuration/cover',
+        MENU_ICON: 'Settings2',
+        IS_ACTIVE: 'Y'
+      }
+    ]
+  },
   { MENU_ID: 'POLICY_ADMIN', MENU_NAME: 'Policy Administration', MENU_PARENT_ID: null, MENU_SEQ_NO: 5, MENU_PATH: '/policy-administration', MENU_ICON: 'Briefcase', IS_ACTIVE: 'Y' },
   { MENU_ID: 'UNDERWRITING', MENU_NAME: 'Underwriting', MENU_PARENT_ID: null, MENU_SEQ_NO: 6, MENU_PATH: '/underwriting', MENU_ICON: 'FileCheck', IS_ACTIVE: 'Y' },
   { MENU_ID: 'PREMIUM_COLLECTION', MENU_NAME: 'Premium Collection', MENU_PARENT_ID: null, MENU_SEQ_NO: 7, MENU_PATH: '/premium-collection', MENU_ICON: 'CreditCard', IS_ACTIVE: 'Y' },
@@ -97,7 +116,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [dbMenus, setDbMenus] = useState<MenuListItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({
-    ADMINISTRATION: true // Keep Administration expanded by default
+    ADMINISTRATION: true, // Keep Administration expanded by default
+    PRODUCT_CONFIG: true // Keep Product Config expanded by default
   });
   const location = useLocation();
 
