@@ -18,6 +18,9 @@ export const authService = {
       });
 
       const data = await response.json();
+      if (data.success && data.data?.token) {
+        localStorage.setItem('kins_auth_token', data.data.token);
+      }
       return data;
     } catch (error: any) {
       return {
@@ -32,8 +35,15 @@ export const authService = {
    */
   async getCurrentUser(): Promise<UserProfile | null> {
     try {
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('kins_auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         method: 'GET',
+        headers,
         credentials: 'include',
       });
 
@@ -56,6 +66,7 @@ export const authService = {
    */
   async logout(): Promise<void> {
     try {
+      localStorage.removeItem('kins_auth_token');
       await fetch(`${API_BASE_URL}/auth/logout`, {
         method: 'POST',
         credentials: 'include',

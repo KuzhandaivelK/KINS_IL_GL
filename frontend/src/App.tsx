@@ -13,6 +13,7 @@ import { MenusPage } from './pages/MenusPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { TariffRatesPage } from './pages/TariffRatesPage';
 import { CoversPage } from './pages/CoversPage';
+import { ProductsPage } from './pages/ProductsPage';
 
 export const App: React.FC = () => {
   return (
@@ -33,8 +34,9 @@ export const App: React.FC = () => {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/individual-life" element={<IndividualLifePage />} />
             <Route path="/group-life" element={<GroupLifePage />} />
-            <Route path="/product-configuration" element={<PlaceholderModulePage />} />
+            <Route path="/product-configuration" element={<Navigate to="/product-configuration/products" replace />} />
             <Route path="/product-configuration/cover" element={<CoversPage />} />
+            <Route path="/product-configuration/products" element={<ProductsPage />} />
             <Route path="/policy-administration" element={<PlaceholderModulePage />} />
             <Route path="/underwriting" element={<PlaceholderModulePage />} />
             <Route path="/premium-collection" element={<PlaceholderModulePage />} />

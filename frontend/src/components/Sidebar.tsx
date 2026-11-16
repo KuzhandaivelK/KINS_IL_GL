@@ -79,6 +79,15 @@ const defaultFallbackMenus: MenuListItem[] = [
         MENU_PATH: '/product-configuration/cover',
         MENU_ICON: 'Settings2',
         IS_ACTIVE: 'Y'
+      },
+      {
+        MENU_ID: 'PRODUCT',
+        MENU_NAME: 'Products',
+        MENU_PARENT_ID: 'PRODUCT_CONFIG',
+        MENU_SEQ_NO: 2,
+        MENU_PATH: '/product-configuration/products',
+        MENU_ICON: 'Package',
+        IS_ACTIVE: 'Y'
       }
     ]
   },

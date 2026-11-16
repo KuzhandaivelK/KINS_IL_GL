@@ -19,9 +19,8 @@ export class AuthController {
 
       const { user, token } = await authService.authenticate(username, password);
 
-      // Set secure HttpOnly cookie for session management
-      // 15 minutes = 15 * 60 * 1000 ms
-      const maxAge = 15 * 60 * 1000;
+      // Set secure HttpOnly cookie for session management (7 days)
+      const maxAge = 7 * 24 * 60 * 60 * 1000;
 
       res.cookie('authToken', token, {
         httpOnly: true,
