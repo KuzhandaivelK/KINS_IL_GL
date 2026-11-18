@@ -26,7 +26,9 @@ import {
   Layers,
   Folder,
   CircleDot,
-  Calculator
+  Calculator,
+  GitBranch,
+  FileText
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -56,7 +58,9 @@ const iconDictionary: Record<string, React.ComponentType<{ className?: string }>
   Layers,
   Folder,
   CircleDot,
-  Calculator
+  Calculator,
+  GitBranch,
+  FileText
 };
 
 // Default fallback items in case API is loading or network is offline
@@ -78,6 +82,15 @@ const defaultFallbackMenus: MenuListItem[] = [
         MENU_SEQ_NO: 1,
         MENU_PATH: '/individual-life/quick-quote',
         MENU_ICON: 'Calculator',
+        IS_ACTIVE: 'Y'
+      },
+      {
+        MENU_ID: 'PROPOSAL_ENTRY',
+        MENU_NAME: 'Proposal Entry',
+        MENU_PARENT_ID: 'INDIVIDUAL_LIFE',
+        MENU_SEQ_NO: 2,
+        MENU_PATH: '/individual-life/proposal',
+        MENU_ICON: 'FileText',
         IS_ACTIVE: 'Y'
       }
     ]
@@ -131,7 +144,8 @@ const defaultFallbackMenus: MenuListItem[] = [
       { MENU_ID: 'USER_MANAGEMENT', MENU_NAME: 'User Management', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 1, MENU_PATH: '/administration/users', MENU_ICON: 'UserCog', IS_ACTIVE: 'Y' },
       { MENU_ID: 'MENU_MANAGEMENT', MENU_NAME: 'Menu Setup', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 2, MENU_PATH: '/administration/menus', MENU_ICON: 'Menu', IS_ACTIVE: 'Y' },
       { MENU_ID: 'CUSTOMER_MANAGEMENT', MENU_NAME: 'Customers', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 3, MENU_PATH: '/administration/customers', MENU_ICON: 'Folder', IS_ACTIVE: 'Y' },
-      { MENU_ID: 'RATE_FACT', MENU_NAME: 'Rating Engine', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 4, MENU_PATH: '/administration/rating', MENU_ICON: 'Layers', IS_ACTIVE: 'Y' }
+      { MENU_ID: 'RATE_FACT', MENU_NAME: 'Rating Engine', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 4, MENU_PATH: '/administration/rating', MENU_ICON: 'Layers', IS_ACTIVE: 'Y' },
+      { MENU_ID: 'WORKFLOW_CONFIG', MENU_NAME: 'Workflow Setup', MENU_PARENT_ID: 'ADMINISTRATION', MENU_SEQ_NO: 5, MENU_PATH: '/administration/workflow', MENU_ICON: 'GitBranch', IS_ACTIVE: 'Y' }
     ]
   }
 ];

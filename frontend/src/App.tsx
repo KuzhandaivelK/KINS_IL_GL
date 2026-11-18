@@ -15,6 +15,8 @@ import { TariffRatesPage } from './pages/TariffRatesPage';
 import { CoversPage } from './pages/CoversPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { QuickQuotePage } from './pages/QuickQuotePage';
+import { WorkflowPage } from './pages/WorkflowPage';
+import { ProposalPage } from './pages/ProposalPage';
 
 export const App: React.FC = () => {
   return (
@@ -36,6 +38,8 @@ export const App: React.FC = () => {
             <Route path="/individual-life" element={<IndividualLifePage />} />
             <Route path="/individual-life/quick-quote" element={<QuickQuotePage />} />
             <Route path="/quick-quote" element={<Navigate to="/individual-life/quick-quote" replace />} />
+            <Route path="/individual-life/proposal" element={<ProposalPage />} />
+            <Route path="/proposal" element={<Navigate to="/individual-life/proposal" replace />} />
             <Route path="/group-life" element={<GroupLifePage />} />
             <Route path="/product-configuration" element={<Navigate to="/product-configuration/products" replace />} />
             <Route path="/product-configuration/cover" element={<CoversPage />} />
@@ -52,6 +56,7 @@ export const App: React.FC = () => {
             <Route path="/administration/menus" element={<MenusPage />} />
             <Route path="/administration/customers" element={<CustomersPage />} />
             <Route path="/administration/rating" element={<TariffRatesPage />} />
+            <Route path="/administration/workflow" element={<WorkflowPage />} />
           </Route>
 
           {/* Root Redirect to /dashboard (which redirects to /login if unauthenticated) */}

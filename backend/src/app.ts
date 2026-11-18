@@ -11,6 +11,8 @@ import tariffRoutes from './routes/tariffRoutes';
 import coverRoutes from './routes/coverRoutes';
 import productRoutes from './routes/productRoutes';
 import quoteRoutes from './routes/quoteRoutes';
+import workflowRoutes from './routes/workflowRoutes';
+import proposalRoutes from './routes/proposalRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -49,6 +51,8 @@ app.use('/api/tariff', tariffRoutes);
 app.use('/api/covers', coverRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/quotes', quoteRoutes);
+app.use('/api/workflows', workflowRoutes);
+app.use('/api/proposals', proposalRoutes);
 
 // Centralized error handling
 app.use(errorHandler);
