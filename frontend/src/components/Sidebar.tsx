@@ -25,7 +25,8 @@ import {
   Menu as MenuIcon,
   Layers,
   Folder,
-  CircleDot
+  CircleDot,
+  Calculator
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,13 +55,33 @@ const iconDictionary: Record<string, React.ComponentType<{ className?: string }>
   Menu: MenuIcon,
   Layers,
   Folder,
-  CircleDot
+  CircleDot,
+  Calculator
 };
 
 // Default fallback items in case API is loading or network is offline
 const defaultFallbackMenus: MenuListItem[] = [
   { MENU_ID: 'DASHBOARD', MENU_NAME: 'Dashboard', MENU_PARENT_ID: null, MENU_SEQ_NO: 1, MENU_PATH: '/dashboard', MENU_ICON: 'LayoutDashboard', IS_ACTIVE: 'Y' },
-  { MENU_ID: 'INDIVIDUAL_LIFE', MENU_NAME: 'Individual Life', MENU_PARENT_ID: null, MENU_SEQ_NO: 2, MENU_PATH: '/individual-life', MENU_ICON: 'UserCheck', IS_ACTIVE: 'Y' },
+  {
+    MENU_ID: 'INDIVIDUAL_LIFE',
+    MENU_NAME: 'Individual Life',
+    MENU_PARENT_ID: null,
+    MENU_SEQ_NO: 2,
+    MENU_PATH: '/individual-life',
+    MENU_ICON: 'UserCheck',
+    IS_ACTIVE: 'Y',
+    children: [
+      {
+        MENU_ID: 'QUICK_QUOTE',
+        MENU_NAME: 'Quick Quote',
+        MENU_PARENT_ID: 'INDIVIDUAL_LIFE',
+        MENU_SEQ_NO: 1,
+        MENU_PATH: '/individual-life/quick-quote',
+        MENU_ICON: 'Calculator',
+        IS_ACTIVE: 'Y'
+      }
+    ]
+  },
   { MENU_ID: 'GROUP_LIFE', MENU_NAME: 'Group Life', MENU_PARENT_ID: null, MENU_SEQ_NO: 3, MENU_PATH: '/group-life', MENU_ICON: 'Users', IS_ACTIVE: 'Y' },
   {
     MENU_ID: 'PRODUCT_CONFIG',
@@ -126,7 +147,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({
     ADMINISTRATION: true, // Keep Administration expanded by default
-    PRODUCT_CONFIG: true // Keep Product Config expanded by default
+    PRODUCT_CONFIG: true, // Keep Product Config expanded by default
+    INDIVIDUAL_LIFE: true // Keep Individual Life expanded by default
   });
   const location = useLocation();
 

@@ -775,7 +775,7 @@ export const ProductsPage: React.FC = () => {
 
       {/* VIEW MODE 2: IN-PAGE PRODUCT CONFIGURATOR (CREATE / EDIT) */}
       {(pageMode === 'create' || pageMode === 'edit') && (
-        <form onSubmit={handleSaveProduct} className="space-y-6">
+        <form onSubmit={handleSaveProduct} noValidate className="space-y-6">
           {/* Editor Header Bar */}
           <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
@@ -1103,7 +1103,7 @@ export const ProductsPage: React.FC = () => {
                 <input
                   type="number"
                   min="0"
-                  step="1000"
+                  step="any"
                   value={formData.PROD_MIN_SA}
                   onChange={(e) =>
                     setFormData({
@@ -1128,7 +1128,7 @@ export const ProductsPage: React.FC = () => {
                 <input
                   type="number"
                   min="0"
-                  step="1000"
+                  step="any"
                   value={formData.PROD_MAX_SA}
                   onChange={(e) =>
                     setFormData({

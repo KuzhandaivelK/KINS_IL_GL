@@ -14,6 +14,7 @@ import { CustomersPage } from './pages/CustomersPage';
 import { TariffRatesPage } from './pages/TariffRatesPage';
 import { CoversPage } from './pages/CoversPage';
 import { ProductsPage } from './pages/ProductsPage';
+import { QuickQuotePage } from './pages/QuickQuotePage';
 
 export const App: React.FC = () => {
   return (
@@ -33,6 +34,8 @@ export const App: React.FC = () => {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/individual-life" element={<IndividualLifePage />} />
+            <Route path="/individual-life/quick-quote" element={<QuickQuotePage />} />
+            <Route path="/quick-quote" element={<Navigate to="/individual-life/quick-quote" replace />} />
             <Route path="/group-life" element={<GroupLifePage />} />
             <Route path="/product-configuration" element={<Navigate to="/product-configuration/products" replace />} />
             <Route path="/product-configuration/cover" element={<CoversPage />} />
