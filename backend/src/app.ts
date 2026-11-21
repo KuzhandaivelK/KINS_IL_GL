@@ -13,6 +13,7 @@ import productRoutes from './routes/productRoutes';
 import quoteRoutes from './routes/quoteRoutes';
 import workflowRoutes from './routes/workflowRoutes';
 import proposalRoutes from './routes/proposalRoutes';
+import policyRoutes from './routes/policyRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -53,6 +54,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/proposals', proposalRoutes);
+app.use('/api/policies', policyRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

@@ -13,6 +13,7 @@ export interface OracleUserRecord {
   USER_CREATED_BY?: string | null;
   USER_MODIFIED_AT?: Date | null;
   USER_MODIFIED_BY?: string | null;
+  USER_GROUP?: string | null;
 }
 
 /**
@@ -24,6 +25,7 @@ export interface SafeUserProfile {
   description?: string | null;
   disableFlag: string;
   loginCount?: number;
+  userGroup: string;
   createdAt?: Date | null;
   createdBy?: string | null;
   modifiedAt?: Date | null;
@@ -53,6 +55,7 @@ export interface UpdateUserInput {
 export interface JwtUserPayload {
   userId: string;
   userName: string;
+  userGroup?: string;
   iat?: number;
   exp?: number;
 }

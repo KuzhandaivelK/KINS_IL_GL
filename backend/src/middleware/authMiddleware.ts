@@ -21,7 +21,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 
   if (!token) {
     if (env.NODE_ENV === 'development') {
-      req.user = { userId: 'admin', userName: 'System Administrator' };
+      req.user = { userId: 'admin', userName: 'System Administrator', userGroup: 'ADMIN' };
       return next();
     }
 
@@ -38,7 +38,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     next();
   } catch (err: any) {
     if (env.NODE_ENV === 'development') {
-      req.user = { userId: 'admin', userName: 'System Administrator' };
+      req.user = { userId: 'admin', userName: 'System Administrator', userGroup: 'ADMIN' };
       return next();
     }
 

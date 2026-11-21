@@ -75,13 +75,15 @@ export class AuthService {
       userName: userRecord.USER_NAME || userRecord.USER_ID,
       description: userRecord.USER_L1_DESC || null,
       disableFlag: userRecord.USER_DISABLE_FLAG || 'N',
-      loginCount: (userRecord.USER_LOGIN_COUNT || 0) + 1
+      loginCount: (userRecord.USER_LOGIN_COUNT || 0) + 1,
+      userGroup: userRecord.USER_GROUP || 'USER'
     };
 
     // 6. Generate signed JWT token
     const payload: JwtUserPayload = {
       userId: safeUser.userId,
-      userName: safeUser.userName
+      userName: safeUser.userName,
+      userGroup: safeUser.userGroup
     };
 
     const token = jwt.sign(payload, env.JWT_SECRET, {
@@ -109,7 +111,8 @@ export class AuthService {
       userName: userRecord.USER_NAME || userRecord.USER_ID,
       description: userRecord.USER_L1_DESC || null,
       disableFlag: userRecord.USER_DISABLE_FLAG || 'N',
-      loginCount: userRecord.USER_LOGIN_COUNT || 0
+      loginCount: userRecord.USER_LOGIN_COUNT || 0,
+      userGroup: userRecord.USER_GROUP || 'USER'
     };
   }
 }

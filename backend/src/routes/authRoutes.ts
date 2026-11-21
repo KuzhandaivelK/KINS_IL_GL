@@ -5,10 +5,10 @@ import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
 
-// Rate limiter for authentication endpoint: 10 attempts per 15 minutes per IP
+// Rate limiter for authentication endpoint: 100 attempts per 15 minutes per IP
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   message: {
     success: false,
     message: 'Too many login attempts. Please try again after 15 minutes.'

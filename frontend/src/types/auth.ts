@@ -1,6 +1,7 @@
 export interface UserProfile {
   userId: string;
   userName: string;
+  userGroup?: string;
   description?: string | null;
   disableFlag: string;
   loginCount?: number;

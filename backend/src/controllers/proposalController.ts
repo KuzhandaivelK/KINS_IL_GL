@@ -173,7 +173,7 @@ export const proposalController = {
   async createProposal(req: Request, res: Response): Promise<void> {
     try {
       const validated = createProposalSchema.parse(req.body);
-      const username = (req as any).user?.USR_ID || 'admin';
+      const username = (req as any).user?.userId || (req as any).user?.USR_ID || 'admin';
 
       const proposal = await proposalRepository.create(validated, username);
 
@@ -208,7 +208,7 @@ export const proposalController = {
     try {
       const propNo = req.params.id.trim();
       const validated = createProposalSchema.parse(req.body);
-      const username = (req as any).user?.USR_ID || 'admin';
+      const username = (req as any).user?.userId || (req as any).user?.USR_ID || 'admin';
 
       const updated = await proposalRepository.update(propNo, validated, username);
 
@@ -306,7 +306,17 @@ export const proposalController = {
     try {
       const propNo = req.params.id.trim();
       const validated = workflowActionSchema.parse(req.body);
-      const username = (req as any).user?.USR_ID || 'admin';
+      const username = (req as any).user?.userId || (req as any).user?.USR_ID || 'admin';
+      const userGroup = ((req as any).user?.userGroup || 'ADMIN').toUpperCase();
+
+      // Enforce role separation: UWUSER / DEUSER can only submit for verification
+      if ((userGroup === 'UWUSER' || userGroup === 'DEUSER') && validated.action === 'APPROVE') {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: Underwriting users can only submit proposals for verification. Approval & authorization requires POLICY_ADMIN category.'
+        });
+        return;
+      }
 
       const updated = await proposalRepository.processWorkflowAction(
         propNo,

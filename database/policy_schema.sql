@@ -1,0 +1,317 @@
+-- =============================================================================
+-- Core Life Insurance System: Policy Administration & Conversion Schema
+-- Supporting Proposal Conversion, Policy Approval, and Schedule Generation
+-- =============================================================================
+
+-- 1. Sequences
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_ID START WITH 20001 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_PAS_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_PAS_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_PRD_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_PRD_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_PDL_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_PDL_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_PBEN_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_PBEN_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_PEX_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_PEX_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+BEGIN
+  EXECUTE IMMEDIATE 'DROP SEQUENCE SEQ_POL_PPS_ID';
+EXCEPTION
+  WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF;
+END;
+/
+CREATE SEQUENCE SEQ_POL_PPS_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+-- 2. Drop existing policy tables if present
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_PREMIUM_SUMMARY CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_EXCLUSION CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_BENEFICIARY CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_DISC_LOAD CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_RIDER CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_ASSURED CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE T_POLICY_INFO CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+
+-- =============================================================================
+-- TABLE 1: T_POLICY_INFO (Policy Header & Inception Details)
+-- =============================================================================
+CREATE TABLE T_POLICY_INFO (
+  POL_ID                    NUMBER            DEFAULT SEQ_POL_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PROP_NO                   VARCHAR2(30)      NOT NULL,
+  POL_DATE                  DATE              DEFAULT SYSDATE NOT NULL,
+  POL_ISSUE_DATE            DATE              DEFAULT SYSDATE NOT NULL,
+  POL_INCEPTION_DATE        DATE              DEFAULT SYSDATE NOT NULL,
+  POL_MATURITY_DATE         DATE              NOT NULL,
+  POL_PROD_CODE             VARCHAR2(20)      NOT NULL,
+  POL_PLAN_TYPE             VARCHAR2(30)      DEFAULT 'TERM' NOT NULL,
+  POL_TERM                  NUMBER(3,0)       NOT NULL,
+  POL_PREM_PAY_TERM         NUMBER(3,0)       NOT NULL,
+  POL_SUM_ASSURED           NUMBER(17,3)      NOT NULL,
+  POL_PAY_FREQ              VARCHAR2(10)      DEFAULT 'ANNUAL' NOT NULL,
+  POL_STATUS                VARCHAR2(20)      DEFAULT 'PENDING_APPROVAL' NOT NULL,
+  POL_APPROVAL_LEVEL        NUMBER(2,0)       DEFAULT 1 NOT NULL,
+  POL_APPROVED_BY           VARCHAR2(26),
+  POL_APPROVED_ON           DATE,
+  POL_APPROVAL_REMARKS      VARCHAR2(1000),
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_INFO PRIMARY KEY (POL_ID),
+  CONSTRAINT UQ_POL_NO UNIQUE (POL_NO),
+  CONSTRAINT UQ_POL_UID UNIQUE (POL_UID),
+  CONSTRAINT CHK_POL_STATUS CHECK (POL_STATUS IN ('PENDING_APPROVAL', 'APPROVED', 'IN_FORCE', 'LAPSED', 'SURRENDERED', 'MATURED', 'CLAIMED')),
+  CONSTRAINT CHK_POL_FREQ CHECK (POL_PAY_FREQ IN ('ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY', 'MONTHLY', 'SINGLE')),
+  CONSTRAINT CHK_POL_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+COMMENT ON TABLE T_POLICY_INFO IS 'Master life insurance policy contracts converted from proposals';
+
+-- =============================================================================
+-- TABLE 2: T_POLICY_ASSURED (Insured Member Details)
+-- =============================================================================
+CREATE TABLE T_POLICY_ASSURED (
+  PAS_ID                    NUMBER            DEFAULT SEQ_POL_PAS_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PAS_NAME                  VARCHAR2(150)     NOT NULL,
+  PAS_DOB                   DATE              NOT NULL,
+  PAS_AGE                   NUMBER(3,0)       NOT NULL,
+  PAS_GENDER                VARCHAR2(1)       NOT NULL,
+  PAS_OCCUPATION            VARCHAR2(100),
+  PAS_ANN_INCOME            NUMBER(17,3)      DEFAULT 0,
+  PAS_ID_TYPE               VARCHAR2(30)      DEFAULT 'NATIONAL_ID',
+  PAS_ID_NO                 VARCHAR2(50),
+  PAS_MOBILE                VARCHAR2(25),
+  PAS_EMAIL                 VARCHAR2(100),
+  PAS_ADDRESS               VARCHAR2(300),
+  PAS_SMOKER_YN             VARCHAR2(1)       DEFAULT 'N' NOT NULL,
+  PAS_HIV_YN                VARCHAR2(1)       DEFAULT 'N' NOT NULL,
+  PAS_HEIGHT_CM             NUMBER(5,2),
+  PAS_WEIGHT_KG             NUMBER(5,2),
+  PAS_BMI                   NUMBER(5,2),
+  PAS_MEDICAL_HISTORY       VARCHAR2(1000),
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_ASSURED PRIMARY KEY (PAS_ID),
+  CONSTRAINT FK_POL_PAS_NO FOREIGN KEY (POL_NO) REFERENCES T_POLICY_INFO(POL_NO) ON DELETE CASCADE,
+  CONSTRAINT CHK_POL_PAS_GENDER CHECK (PAS_GENDER IN ('M', 'F', 'O')),
+  CONSTRAINT CHK_POL_PAS_SMOKER CHECK (PAS_SMOKER_YN IN ('Y', 'N')),
+  CONSTRAINT CHK_POL_PAS_HIV CHECK (PAS_HIV_YN IN ('Y', 'N')),
+  CONSTRAINT CHK_POL_PAS_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+-- =============================================================================
+-- TABLE 3: T_POLICY_RIDER (Attached Riders on Policy)
+-- =============================================================================
+CREATE TABLE T_POLICY_RIDER (
+  PRD_ID                    NUMBER            DEFAULT SEQ_POL_PRD_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PRD_RIDER_CODE            VARCHAR2(20)      NOT NULL,
+  PRD_RIDER_NAME            VARCHAR2(150)     NOT NULL,
+  PRD_SUM_ASSURED           NUMBER(17,3)      NOT NULL,
+  PRD_RATE                  NUMBER(12,6)      DEFAULT 0,
+  PRD_PREMIUM               NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_RIDER PRIMARY KEY (PRD_ID),
+  CONSTRAINT FK_POL_PRD_NO FOREIGN KEY (POL_NO) REFERENCES T_POLICY_INFO(POL_NO) ON DELETE CASCADE,
+  CONSTRAINT CHK_POL_PRD_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+-- =============================================================================
+-- TABLE 4: T_POLICY_DISC_LOAD (Policy Discounts and Loadings)
+-- =============================================================================
+CREATE TABLE T_POLICY_DISC_LOAD (
+  PDL_ID                    NUMBER            DEFAULT SEQ_POL_PDL_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PDL_TYPE                  VARCHAR2(10)      NOT NULL,
+  PDL_REASON                VARCHAR2(50)      NOT NULL,
+  PDL_CALC_TYPE             VARCHAR2(15)      DEFAULT 'PERCENTAGE' NOT NULL,
+  PDL_RATE_VALUE            NUMBER(12,4)      DEFAULT 0 NOT NULL,
+  PDL_AMOUNT                NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PDL_REMARKS               VARCHAR2(300),
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_DISC_LOAD PRIMARY KEY (PDL_ID),
+  CONSTRAINT FK_POL_PDL_NO FOREIGN KEY (POL_NO) REFERENCES T_POLICY_INFO(POL_NO) ON DELETE CASCADE,
+  CONSTRAINT CHK_POL_PDL_TYPE CHECK (PDL_TYPE IN ('DISCOUNT', 'LOADING')),
+  CONSTRAINT CHK_POL_PDL_CALC CHECK (PDL_CALC_TYPE IN ('PERCENTAGE', 'FLAT', 'PER_MILLE')),
+  CONSTRAINT CHK_POL_PDL_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+-- =============================================================================
+-- TABLE 5: T_POLICY_BENEFICIARY (Policy Nominees & Beneficiaries)
+-- =============================================================================
+CREATE TABLE T_POLICY_BENEFICIARY (
+  PBEN_ID                   NUMBER            DEFAULT SEQ_POL_PBEN_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PBEN_NAME                 VARCHAR2(150)     NOT NULL,
+  PBEN_RELATION             VARCHAR2(50)      NOT NULL,
+  PBEN_DOB                  DATE,
+  PBEN_SHARE_PCT            NUMBER(5,2)       DEFAULT 100.00 NOT NULL,
+  PBEN_ID_TYPE              VARCHAR2(30),
+  PBEN_ID_NO                VARCHAR2(50),
+  PBEN_CONTACT              VARCHAR2(50),
+  PBEN_GUARDIAN_NAME        VARCHAR2(150),
+  PBEN_GUARDIAN_RELATION    VARCHAR2(50),
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_BENEFICIARY PRIMARY KEY (PBEN_ID),
+  CONSTRAINT FK_POL_PBEN_NO FOREIGN KEY (POL_NO) REFERENCES T_POLICY_INFO(POL_NO) ON DELETE CASCADE,
+  CONSTRAINT CHK_POL_PBEN_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+-- =============================================================================
+-- TABLE 6: T_POLICY_EXCLUSION (Endorsed Policy Exclusions)
+-- =============================================================================
+CREATE TABLE T_POLICY_EXCLUSION (
+  PEX_ID                    NUMBER            DEFAULT SEQ_POL_PEX_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PEX_CODE                  VARCHAR2(30)      NOT NULL,
+  PEX_DESC                  VARCHAR2(500)     NOT NULL,
+  PEX_REASON                VARCHAR2(100),
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_EXCLUSION PRIMARY KEY (PEX_ID),
+  CONSTRAINT FK_POL_PEX_NO FOREIGN KEY (POL_NO) REFERENCES T_POLICY_INFO(POL_NO) ON DELETE CASCADE,
+  CONSTRAINT CHK_POL_PEX_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+-- =============================================================================
+-- TABLE 7: T_POLICY_PREMIUM_SUMMARY (Contract Premium Ledger)
+-- =============================================================================
+CREATE TABLE T_POLICY_PREMIUM_SUMMARY (
+  PPS_ID                    NUMBER            DEFAULT SEQ_POL_PPS_ID.NEXTVAL NOT NULL,
+  POL_NO                    VARCHAR2(30)      NOT NULL,
+  POL_UID                   VARCHAR2(36)      NOT NULL,
+  PPS_MTH_CODE              VARCHAR2(30),
+  PPS_BASE_RATE             NUMBER(12,6)      DEFAULT 0,
+  PPS_BASIC_SUM_ASSURED     NUMBER(17,3)      NOT NULL,
+  PPS_BASIC_PREMIUM         NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_TOTAL_RIDER_PREMIUM   NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_TOTAL_LOADING         NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_TOTAL_DISCOUNT        NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_NET_ANNUAL_PREM       NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_MODAL_FACTOR          NUMBER(8,4)       DEFAULT 1.0000 NOT NULL,
+  PPS_INSTALLMENT_PREM      NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_TAX_AMOUNT            NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  PPS_TOTAL_PAYABLE         NUMBER(17,3)      DEFAULT 0 NOT NULL,
+  IS_ACTIVE                 VARCHAR2(1)       DEFAULT 'Y' NOT NULL,
+  CREATED_BY                VARCHAR2(26)      DEFAULT 'ADMIN' NOT NULL,
+  CREATED_ON                DATE              DEFAULT SYSDATE NOT NULL,
+  MODIFIED_BY               VARCHAR2(26),
+  MODIFIED_ON               DATE,
+  CONSTRAINT PK_POL_PREM_SUMMARY PRIMARY KEY (PPS_ID),
+  CONSTRAINT UQ_POL_PPS_NO UNIQUE (POL_NO),
+  CONSTRAINT FK_POL_PPS_NO FOREIGN KEY (POL_NO) REFERENCES T_POLICY_INFO(POL_NO) ON DELETE CASCADE,
+  CONSTRAINT CHK_POL_PPS_ACT CHECK (IS_ACTIVE IN ('Y', 'N'))
+);
+
+-- =============================================================================
+-- 8. Setup Dedicated Users in MTBL_USER for Each Workflow Category
+-- =============================================================================
+-- User 1: policy_admin (Policy Administration Category - Approve, Authorize, Convert, Schedule)
+MERGE INTO MTBL_USER u
+USING (SELECT 'policy_admin' AS USER_ID FROM DUAL) src
+ON (u.USER_ID = src.USER_ID)
+WHEN NOT MATCHED THEN
+  INSERT (USER_ID, USER_PASSWORD, USER_NAME, USER_L1_DESC, USER_DISABLE_FLAG, USER_LOGIN_COUNT, USER_CREATED_AT, USER_CREATED_BY, USER_GROUP)
+  VALUES ('policy_admin', 'Password@123', 'Policy Administration Manager', 'Policy Admin & Conversion Officer', 'N', 0, SYSDATE, 'admin', 'POLICY_ADMIN')
+WHEN MATCHED THEN
+  UPDATE SET USER_GROUP = 'POLICY_ADMIN', USER_DISABLE_FLAG = 'N';
+
+-- User 2: uwuser / uw_maker (Underwriting Category - Proposal Entry & Submit for Verification)
+MERGE INTO MTBL_USER u
+USING (SELECT 'uwuser' AS USER_ID FROM DUAL) src
+ON (u.USER_ID = src.USER_ID)
+WHEN NOT MATCHED THEN
+  INSERT (USER_ID, USER_PASSWORD, USER_NAME, USER_L1_DESC, USER_DISABLE_FLAG, USER_LOGIN_COUNT, USER_CREATED_AT, USER_CREATED_BY, USER_GROUP)
+  VALUES ('uwuser', 'Password@123', 'Underwriting Proposal Officer', 'Proposal Entry & Medical Intake', 'N', 0, SYSDATE, 'admin', 'UWUSER')
+WHEN MATCHED THEN
+  UPDATE SET USER_GROUP = 'UWUSER', USER_DISABLE_FLAG = 'N';
+
+-- User 3: admin (System Administrator - Full Access)
+MERGE INTO MTBL_USER u
+USING (SELECT 'admin' AS USER_ID FROM DUAL) src
+ON (u.USER_ID = src.USER_ID)
+WHEN MATCHED THEN
+  UPDATE SET USER_GROUP = 'ADMIN', USER_DISABLE_FLAG = 'N';
+
+-- =============================================================================
+-- 9. Setup Menu Entry for Policy Administration
+-- =============================================================================
+MERGE INTO MTBL_MENU m
+USING (SELECT 'POLICIES_MGMT' AS MENU_ID FROM DUAL) src
+ON (m.MENU_ID = src.MENU_ID)
+WHEN NOT MATCHED THEN
+  INSERT (MENU_ID, MENU_NAME, MENU_PARENT_ID, MENU_SEQ_NO, MENU_PATH, MENU_ICON, IS_ACTIVE, CREATED_BY, CREATED_AT)
+  VALUES ('POLICIES_MGMT', 'Policy Management', 'POLICY_ADMIN', 1, '/policy-administration', 'Briefcase', 'Y', 'admin', SYSDATE);
+
+COMMIT;

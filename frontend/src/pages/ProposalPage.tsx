@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/AuthContext';
 import {
   FileText,
   Plus,
@@ -30,9 +32,12 @@ import {
   Calendar,
   Activity,
   HeartPulse,
-  HeartHandshake
+  HeartHandshake,
+  ArrowUpRight,
+  FileSpreadsheet
 } from 'lucide-react';
 import { proposalService } from '../services/proposalService';
+import { policyService } from '../services/policyService';
 import { productService } from '../services/productService';
 import { coverService } from '../services/coverService';
 import {
@@ -141,6 +146,12 @@ const emptyFormData: ProposalFormData = {
 };
 
 export const ProposalPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const userGroup = (user?.userGroup || 'ADMIN').toUpperCase();
+  const isPolicyAdmin = userGroup === 'POLICY_ADMIN' || userGroup === 'ADMIN';
+  const isUnderwriter = userGroup === 'UWUSER' || userGroup === 'DEUSER' || userGroup === 'USER';
+
   // Page mode: 'list' | 'stepper'
   const [pageMode, setPageMode] = useState<'list' | 'stepper'>('list');
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -156,6 +167,8 @@ export const ProposalPage: React.FC = () => {
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [isConverting, setIsConverting] = useState<boolean>(false);
+  const [convertedPolicyNo, setConvertedPolicyNo] = useState<string | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -540,6 +553,28 @@ export const ProposalPage: React.FC = () => {
     }
   };
 
+  // Convert approved proposal to policy contract
+  const handleConvertToPolicy = async () => {
+    if (!editingPropNo) return;
+    setIsConverting(true);
+    setFeedback(null);
+    try {
+      const res = await policyService.convertProposal(editingPropNo);
+      setConvertedPolicyNo(res.policy.info.POL_NO);
+      setFeedback({
+        type: 'success',
+        message: `🎉 Policy Contract ${res.policy.info.POL_NO} generated successfully from Proposal ${editingPropNo}!`
+      });
+      // Refresh proposal detail
+      const refreshed = await proposalService.getProposalById(editingPropNo);
+      setProposalDetail(refreshed.proposal);
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to convert proposal to policy' });
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
   // Delete Proposal
   const handleDeleteProposal = async (propNo: string) => {
     if (!window.confirm(`Are you sure you want to delete proposal '${propNo}' and all associated records?`)) {
@@ -856,6 +891,15 @@ export const ProposalPage: React.FC = () => {
                               >
                                 <ShieldCheck className="w-4 h-4" />
                               </button>
+                              {p.PROP_STATUS === 'CONVERTED' && (
+                                <button
+                                  onClick={() => navigate('/policy-administration')}
+                                  className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                                  title="View Policy in Policy Administration"
+                                >
+                                  <FileSpreadsheet className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDeleteProposal(p.PROP_NO)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -1904,10 +1948,45 @@ export const ProposalPage: React.FC = () => {
 
                 {/* Underwriting Decisions Panel */}
                 <div className="p-5 bg-white rounded-xl border border-purple-200 shadow-xs space-y-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-900 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-purple-600" />
-                    Underwriter Assessment & Decision Console
-                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-purple-900 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      Underwriter Assessment & Workflow Console
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Current Operator:</span>
+                      <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${
+                        isPolicyAdmin
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}>
+                        {user?.userName || user?.userId || 'Unknown'} [{userGroup}]
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Role Guidance Notice */}
+                  {!isPolicyAdmin ? (
+                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2.5 text-xs text-blue-800">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-semibold">Underwriting Officer / Maker Category ({userGroup}):</span>
+                        <p className="mt-0.5 text-blue-700">
+                          You have authority to record life assured details, attach riders, and <strong>Submit for Verification</strong>. Policy authorization and conversion to active policy contracts are restricted to the <strong>POLICY_ADMIN</strong> user category.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-semibold">Policy Administration Authority ({userGroup}):</span>
+                        <p className="mt-0.5 text-emerald-700">
+                          You have full authorization privileges to review underwriting assessments, <strong>Approve & Authorize</strong> proposals, and <strong>Convert to Policy</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -1923,47 +2002,141 @@ export const ProposalPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 pt-2">
-                    {/* Action 1: Submit */}
-                    <button
-                      type="button"
-                      onClick={() => handleWorkflowAction('SUBMIT')}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs transition-colors"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>Submit for Verification</span>
-                    </button>
+                    {/* Action 1: Submit - available to Underwriting User and Admin */}
+                    {(!proposalDetail || proposalDetail.info.PROP_STATUS === 'DRAFT' || proposalDetail.info.PROP_STATUS === 'REWORK' || !isPolicyAdmin) && (
+                      <button
+                        type="button"
+                        disabled={proposalDetail?.info.PROP_STATUS === 'APPROVED' || proposalDetail?.info.PROP_STATUS === 'CONVERTED'}
+                        onClick={() => handleWorkflowAction('SUBMIT')}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span>Submit for Verification</span>
+                      </button>
+                    )}
 
-                    {/* Action 2: Approve */}
-                    <button
-                      type="button"
-                      onClick={() => handleWorkflowAction('APPROVE')}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs transition-colors"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Approve & Authorize</span>
-                    </button>
+                    {/* Policy Admin Action Buttons: Only visible / active for POLICY_ADMIN / ADMIN */}
+                    {isPolicyAdmin && (
+                      <>
+                        {/* Action 2: Approve */}
+                        <button
+                          type="button"
+                          disabled={proposalDetail?.info.PROP_STATUS !== 'SUBMITTED' && proposalDetail?.info.PROP_STATUS !== 'UNDERWRITING'}
+                          onClick={() => handleWorkflowAction('APPROVE')}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Approve & Authorize</span>
+                        </button>
 
-                    {/* Action 3: Send Back / Rework */}
-                    <button
-                      type="button"
-                      onClick={() => handleWorkflowAction('REWORK')}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-xs transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>Send Back for Rework</span>
-                    </button>
+                        {/* Action 3: Send Back / Rework */}
+                        <button
+                          type="button"
+                          disabled={proposalDetail?.info.PROP_STATUS !== 'SUBMITTED' && proposalDetail?.info.PROP_STATUS !== 'UNDERWRITING'}
+                          onClick={() => handleWorkflowAction('REWORK')}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          <span>Send Back for Rework</span>
+                        </button>
 
-                    {/* Action 4: Reject */}
-                    <button
-                      type="button"
-                      onClick={() => handleWorkflowAction('REJECT')}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-xs transition-colors"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>Decline / Reject Risk</span>
-                    </button>
+                        {/* Action 4: Reject */}
+                        <button
+                          type="button"
+                          disabled={proposalDetail?.info.PROP_STATUS !== 'SUBMITTED' && proposalDetail?.info.PROP_STATUS !== 'UNDERWRITING'}
+                          onClick={() => handleWorkflowAction('REJECT')}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span>Decline / Reject Risk</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
+
+                {/* Conversion to Policy Contract Panel */}
+                {proposalDetail?.info.PROP_STATUS === 'APPROVED' && (
+                  <div className="p-6 bg-linear-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border-2 border-emerald-500/30 rounded-xl space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          <h3 className="text-base font-bold text-gray-900">
+                            Proposal Approved & Cleared for Policy Inception
+                          </h3>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Underwriting verification is complete. The proposal terms, sum assured (${formData.info.PROP_SUM_ASSURED.toLocaleString()}), and calculated modal premium have been authorized.
+                        </p>
+                      </div>
+                      <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
+                        READY FOR CONVERSION
+                      </span>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between border-t border-emerald-200">
+                      <div className="text-xs text-gray-500">
+                        {isPolicyAdmin ? (
+                          <span>Executing conversion will generate a formal Policy Number and copy all life assured, riders, beneficiaries, and premium summaries into the Policy register.</span>
+                        ) : (
+                          <span className="text-amber-700 font-medium">Please login as Policy Admin (`policy_admin`) to execute policy conversion.</span>
+                        )}
+                      </div>
+
+                      {isPolicyAdmin && (
+                        <button
+                          type="button"
+                          disabled={isConverting}
+                          onClick={handleConvertToPolicy}
+                          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold text-sm shadow-md transition-all hover:scale-[1.02]"
+                        >
+                          {isConverting ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Converting to Policy...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileSpreadsheet className="w-4 h-4" />
+                              <span>Convert to Policy</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Already Converted Notice & Link */}
+                {proposalDetail?.info.PROP_STATUS === 'CONVERTED' && (
+                  <div className="p-6 bg-teal-50 border border-teal-200 rounded-xl space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-teal-600" />
+                        <h3 className="text-base font-bold text-teal-900">
+                          Proposal Converted to Policy Contract
+                        </h3>
+                      </div>
+                      <span className="px-3 py-1 bg-teal-100 text-teal-800 text-xs font-bold rounded-full">
+                        CONVERTED
+                      </span>
+                    </div>
+                    <p className="text-xs text-teal-800">
+                      This proposal has been converted into an official Life Insurance Policy. You can approve the policy and generate the formal Policy Schedule document in Policy Administration.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/policy-administration')}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                      >
+                        <span>Open Policy Administration & Schedule Generator</span>
+                        <ArrowUpRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Audit Trail Log */}
                 {proposalDetail?.workflowLogs && proposalDetail.workflowLogs.length > 0 && (

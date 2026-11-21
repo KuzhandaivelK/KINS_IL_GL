@@ -17,6 +17,7 @@ import { ProductsPage } from './pages/ProductsPage';
 import { QuickQuotePage } from './pages/QuickQuotePage';
 import { WorkflowPage } from './pages/WorkflowPage';
 import { ProposalPage } from './pages/ProposalPage';
+import { PolicyPage } from './pages/PolicyPage';
 
 export const App: React.FC = () => {
   return (
@@ -44,7 +45,7 @@ export const App: React.FC = () => {
             <Route path="/product-configuration" element={<Navigate to="/product-configuration/products" replace />} />
             <Route path="/product-configuration/cover" element={<CoversPage />} />
             <Route path="/product-configuration/products" element={<ProductsPage />} />
-            <Route path="/policy-administration" element={<PlaceholderModulePage />} />
+            <Route path="/policy-administration" element={<PolicyPage />} />
             <Route path="/underwriting" element={<PlaceholderModulePage />} />
             <Route path="/premium-collection" element={<PlaceholderModulePage />} />
             <Route path="/claims-management" element={<PlaceholderModulePage />} />
