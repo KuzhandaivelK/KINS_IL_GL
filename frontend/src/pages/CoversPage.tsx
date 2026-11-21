@@ -33,6 +33,7 @@ export const CoversPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [lobFilter, setLobFilter] = useState<string>('ALL');
 
   // Messages
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -104,7 +105,8 @@ export const CoversPage: React.FC = () => {
       const res = await coverService.getCovers(
         searchTerm,
         typeFilter === 'ALL' ? undefined : typeFilter,
-        activeOnly
+        activeOnly,
+        lobFilter === 'ALL' ? undefined : lobFilter
       );
 
       if (res.success) {
@@ -129,7 +131,7 @@ export const CoversPage: React.FC = () => {
 
   useEffect(() => {
     fetchCovers();
-  }, [searchTerm, typeFilter, statusFilter]);
+  }, [searchTerm, typeFilter, statusFilter, lobFilter]);
 
   // --- MODAL HANDLERS ---
 
@@ -414,6 +416,21 @@ export const CoversPage: React.FC = () => {
               <option value="INACTIVE">Inactive (N)</option>
             </select>
           </div>
+
+          {/* LOB Business Line Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 font-medium">Line of Business:</span>
+            <select
+              value={lobFilter}
+              onChange={(e) => setLobFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-navy/20 font-semibold"
+            >
+              <option value="ALL">All LOB (IL & GL)</option>
+              <option value="IL">Individual Life (IL)</option>
+              <option value="GL">Group Life (GL)</option>
+              <option value="BOTH">Universal (BOTH)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -427,6 +444,7 @@ export const CoversPage: React.FC = () => {
                 <th className="py-3 px-4">Description</th>
                 <th className="py-3 px-4">Cover Type (STBL_CODE)</th>
                 <th className="py-3 px-4">Sum Assured Limits</th>
+                <th className="py-3 px-4 text-center">LOB</th>
                 <th className="py-3 px-4 text-center">SA %</th>
                 <th className="py-3 px-4 text-center">App Basic Rate</th>
                 <th className="py-3 px-4 text-center">Status</th>
@@ -498,6 +516,19 @@ export const CoversPage: React.FC = () => {
                         ) : (
                           <span className="text-slate-400 font-sans italic">Not restricted</span>
                         )}
+                      </td>
+
+                      {/* LOB */}
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                          c.coverLob === 'GL'
+                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                            : c.coverLob === 'BOTH'
+                            ? 'bg-teal-100 text-teal-700 border border-teal-200'
+                            : 'bg-blue-100 text-blue-700 border border-blue-200'
+                        }`}>
+                          {c.coverLob || 'IL'}
+                        </span>
                       </td>
 
                       {/* SA % */}

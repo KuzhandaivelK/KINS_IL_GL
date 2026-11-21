@@ -12,6 +12,7 @@ export interface OracleCoverRecord {
   COVER_RATE_APPLIED_ON: string | null;
   COVER_SA_PERC: number | null;
   COVER_SA_CALC: string | null;
+  COVER_LOB?: string | null;
   COVER_CREATED_AT?: Date | null;
   COVER_CREATED_BY?: string | null;
   COVER_MODIFIED_AT?: Date | null;
@@ -38,6 +39,7 @@ export interface CoverListItem {
   rateAppliedOn?: string | null;
   saPerc?: number | null;
   saCalc?: string | null;
+  coverLob?: 'IL' | 'GL' | 'BOTH' | string;
   createdAt?: Date | string | null;
   createdBy?: string | null;
   modifiedAt?: Date | string | null;
@@ -58,6 +60,7 @@ export interface CreateCoverInput {
   rateAppliedOn?: string | null;
   saPerc?: number | null;
   saCalc?: string | null;
+  coverLob?: 'IL' | 'GL' | 'BOTH' | string;
   createdBy?: string;
 }
 
@@ -74,5 +77,6 @@ export interface UpdateCoverInput {
   rateAppliedOn?: string | null;
   saPerc?: number | null;
   saCalc?: string | null;
+  coverLob?: 'IL' | 'GL' | 'BOTH' | string;
   modifiedBy?: string;
 }

@@ -37,7 +37,7 @@ export class CoverRepository {
   /**
    * Retrieves all covers with optional search, type filter, and active status
    */
-  async findAll(search?: string, type?: string, activeOnly?: boolean): Promise<CoverListItem[]> {
+  async findAll(search?: string, type?: string, activeOnly?: boolean, lob?: string): Promise<CoverListItem[]> {
     let connection: oracledb.Connection | null = null;
     try {
       connection = await getConnection();
@@ -58,6 +58,7 @@ export class CoverRepository {
           c.COVER_RATE_APPLIED_ON,
           c.COVER_SA_PERC,
           c.COVER_SA_CALC,
+          NVL(c.COVER_LOB, 'IL') AS COVER_LOB,
           c.COVER_CREATED_AT,
           c.COVER_CREATED_BY,
           c.COVER_MODIFIED_AT,
@@ -77,6 +78,11 @@ export class CoverRepository {
       if (type && type.trim()) {
         sql += ` AND c.COVER_TYPE = :type`;
         binds.type = type.trim();
+      }
+
+      if (lob && lob.trim()) {
+        sql += ` AND (c.COVER_LOB = :lob OR c.COVER_LOB = 'BOTH')`;
+        binds.lob = lob.trim().toUpperCase();
       }
 
       if (search && search.trim()) {
@@ -104,6 +110,7 @@ export class CoverRepository {
         rateAppliedOn: row.COVER_RATE_APPLIED_ON || null,
         saPerc: row.COVER_SA_PERC !== null ? Number(row.COVER_SA_PERC) : null,
         saCalc: row.COVER_SA_CALC || null,
+        coverLob: row.COVER_LOB || 'IL',
         createdAt: row.COVER_CREATED_AT || null,
         createdBy: row.COVER_CREATED_BY || null,
         modifiedAt: row.COVER_MODIFIED_AT || null,

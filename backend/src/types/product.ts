@@ -37,6 +37,7 @@ export interface ProductRecord {
   PROD_LOAN_YN: string | null;
   PROD_MAT_YN: string | null;
   PROD_WITHDRAW_YN: string | null;
+  PROD_LOB?: string | null;
   PROD_CREATED_BY?: string | null;
   PROD_CREATED_ON?: Date | string | null;
   PROD_MODIFIED_BY?: string | null;
@@ -76,6 +77,7 @@ export interface CreateProductInput {
   PROD_LOAN_YN?: string;
   PROD_MAT_YN?: string;
   PROD_WITHDRAW_YN?: string;
+  PROD_LOB?: 'IL' | 'GL' | 'BOTH' | string;
   covers?: ProdCoverInput[];
 }
 
@@ -100,6 +102,7 @@ export interface UpdateProductInput {
   PROD_LOAN_YN?: string;
   PROD_MAT_YN?: string;
   PROD_WITHDRAW_YN?: string;
+  PROD_LOB?: 'IL' | 'GL' | 'BOTH' | string;
   covers?: ProdCoverInput[];
 }
 

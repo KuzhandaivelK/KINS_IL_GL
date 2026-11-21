@@ -12,7 +12,7 @@ export const productRepository = {
   /**
    * List all products with their attached cover count and optional search / type filter
    */
-  async findAll(search?: string, prodType?: string): Promise<ProductRecord[]> {
+  async findAll(search?: string, prodType?: string, lob?: string): Promise<ProductRecord[]> {
     let connection: oracledb.Connection | null = null;
     try {
       connection = await getConnection();
@@ -40,6 +40,7 @@ export const productRepository = {
           p.PROD_LOAN_YN,
           p.PROD_MAT_YN,
           p.PROD_WITHDRAW_YN,
+          NVL(p.PROD_LOB, 'IL') AS PROD_LOB,
           p.PROD_CREATED_BY,
           TO_CHAR(p.PROD_CREATED_ON, 'YYYY-MM-DD HH24:MI:SS') AS PROD_CREATED_ON,
           p.PROD_MODIFIED_BY,
@@ -59,6 +60,11 @@ export const productRepository = {
       if (prodType && prodType.trim() !== '') {
         sql += ` AND p.PROD_TYPE = :prodType`;
         binds.prodType = prodType.trim();
+      }
+
+      if (lob && lob.trim() !== '') {
+        sql += ` AND (p.PROD_LOB = :lob OR p.PROD_LOB = 'BOTH')`;
+        binds.lob = lob.trim().toUpperCase();
       }
 
       sql += ` ORDER BY p.PROD_CODE ASC`;
@@ -104,6 +110,7 @@ export const productRepository = {
           p.PROD_LOAN_YN,
           p.PROD_MAT_YN,
           p.PROD_WITHDRAW_YN,
+          NVL(p.PROD_LOB, 'IL') AS PROD_LOB,
           p.PROD_CREATED_BY,
           TO_CHAR(p.PROD_CREATED_ON, 'YYYY-MM-DD HH24:MI:SS') AS PROD_CREATED_ON,
           p.PROD_MODIFIED_BY,
@@ -211,6 +218,7 @@ export const productRepository = {
           PROD_LOAN_YN,
           PROD_MAT_YN,
           PROD_WITHDRAW_YN,
+          PROD_LOB,
           PROD_CREATED_BY,
           PROD_CREATED_ON
         ) VALUES (
@@ -235,6 +243,7 @@ export const productRepository = {
           :prodLoanYn,
           :prodMatYn,
           :prodWithdrawYn,
+          :prodLob,
           :prodCreatedBy,
           SYSDATE
         )
@@ -260,6 +269,7 @@ export const productRepository = {
         prodLoanYn: input.PROD_LOAN_YN || 'N',
         prodMatYn: input.PROD_MAT_YN || 'N',
         prodWithdrawYn: input.PROD_WITHDRAW_YN || 'N',
+        prodLob: input.PROD_LOB || 'IL',
         prodCreatedBy: username
       };
 

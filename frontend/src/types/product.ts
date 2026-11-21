@@ -36,6 +36,7 @@ export interface ProductItem {
   PROD_LOAN_YN: 'Y' | 'N';
   PROD_MAT_YN: 'Y' | 'N';
   PROD_WITHDRAW_YN: 'Y' | 'N';
+  PROD_LOB?: 'IL' | 'GL' | 'BOTH' | string;
   PROD_CREATED_BY?: string | null;
   PROD_CREATED_ON?: string | null;
   PROD_MODIFIED_BY?: string | null;
@@ -69,6 +70,7 @@ export interface ProductFormData {
   PROD_LOAN_YN: 'Y' | 'N';
   PROD_MAT_YN: 'Y' | 'N';
   PROD_WITHDRAW_YN: 'Y' | 'N';
+  PROD_LOB?: 'IL' | 'GL' | 'BOTH' | string;
   covers: ProdCoverItem[];
 }
 

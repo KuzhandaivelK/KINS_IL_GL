@@ -23,10 +23,11 @@ export const productService = {
   /**
    * Fetch all products with optional filters
    */
-  async getProducts(search?: string, prodType?: string): Promise<ProductApiResponse<ProductItem>> {
+  async getProducts(search?: string, prodType?: string, lob?: string): Promise<ProductApiResponse<ProductItem>> {
     const params = new URLSearchParams();
     if (search && search.trim() !== '') params.append('search', search.trim());
     if (prodType && prodType.trim() !== '') params.append('prodType', prodType.trim());
+    if (lob && lob.trim() !== '' && lob !== 'ALL') params.append('lob', lob.trim());
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const res = await fetch(`${API_BASE_URL}${queryString}`, {

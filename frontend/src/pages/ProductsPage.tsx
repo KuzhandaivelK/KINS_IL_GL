@@ -56,6 +56,7 @@ const emptyFormData: ProductFormData = {
   PROD_LOAN_YN: 'N',
   PROD_MAT_YN: 'N',
   PROD_WITHDRAW_YN: 'N',
+  PROD_LOB: 'IL',
   covers: []
 };
 
@@ -69,6 +70,7 @@ export const ProductsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('ALL');
+  const [selectedLobFilter, setSelectedLobFilter] = useState<string>('ALL');
 
   // Master covers available for attachment
   const [availableCovers, setAvailableCovers] = useState<CoverListItem[]>([]);
@@ -97,7 +99,8 @@ export const ProductsPage: React.FC = () => {
     setNotification(null);
     try {
       const typeFilter = selectedTypeFilter === 'ALL' ? undefined : selectedTypeFilter;
-      const res = await productService.getProducts(searchTerm, typeFilter);
+      const lobFilter = selectedLobFilter === 'ALL' ? undefined : selectedLobFilter;
+      const res = await productService.getProducts(searchTerm, typeFilter, lobFilter);
       if (res.success && res.products) {
         setProducts(res.products);
       } else {
@@ -129,7 +132,7 @@ export const ProductsPage: React.FC = () => {
   useEffect(() => {
     loadProducts();
     loadAvailableCovers();
-  }, [selectedTypeFilter]);
+  }, [selectedTypeFilter, selectedLobFilter]);
 
   // Handle Search
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -616,6 +619,17 @@ export const ProductsPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+
+                <select
+                  value={selectedLobFilter}
+                  onChange={(e) => setSelectedLobFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold"
+                >
+                  <option value="ALL">All LOB (IL & GL)</option>
+                  <option value="IL">Individual Life (IL)</option>
+                  <option value="GL">Group Life (GL)</option>
+                  <option value="BOTH">Universal (BOTH)</option>
+                </select>
               </div>
 
               <button
@@ -647,6 +661,7 @@ export const ProductsPage: React.FC = () => {
                     <th className="px-5 py-3.5">Product Code</th>
                     <th className="px-5 py-3.5">Product Name</th>
                     <th className="px-5 py-3.5">Plan Type</th>
+                    <th className="px-5 py-3.5 text-center">LOB</th>
                     <th className="px-5 py-3.5">Policy Terms</th>
                     <th className="px-5 py-3.5">Entry Ages</th>
                     <th className="px-5 py-3.5">Sum Assured Range</th>
@@ -702,6 +717,17 @@ export const ProductsPage: React.FC = () => {
                         <td className="px-5 py-4">
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                             {productTypeMap[prod.PROD_TYPE] || prod.PROD_TYPE}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-center whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                            prod.PROD_LOB === 'GL'
+                              ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                              : prod.PROD_LOB === 'BOTH'
+                              ? 'bg-teal-100 text-teal-700 border border-teal-200'
+                              : 'bg-blue-100 text-blue-700 border border-blue-200'
+                          }`}>
+                            {prod.PROD_LOB || 'IL'}
                           </span>
                         </td>
                         <td className="px-5 py-4 text-xs">

@@ -42,6 +42,7 @@ export const App: React.FC = () => {
             <Route path="/individual-life/proposal" element={<ProposalPage />} />
             <Route path="/proposal" element={<Navigate to="/individual-life/proposal" replace />} />
             <Route path="/group-life" element={<GroupLifePage />} />
+            <Route path="/group-life/quote" element={<GroupLifePage />} />
             <Route path="/product-configuration" element={<Navigate to="/product-configuration/products" replace />} />
             <Route path="/product-configuration/cover" element={<CoversPage />} />
             <Route path="/product-configuration/products" element={<ProductsPage />} />

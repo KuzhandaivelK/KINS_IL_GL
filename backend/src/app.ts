@@ -14,6 +14,7 @@ import quoteRoutes from './routes/quoteRoutes';
 import workflowRoutes from './routes/workflowRoutes';
 import proposalRoutes from './routes/proposalRoutes';
 import policyRoutes from './routes/policyRoutes';
+import groupLifeRoutes from './routes/groupLifeRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -32,8 +33,8 @@ app.use(
 );
 
 // Body parsers
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(cookieParser());
 
 // Request logger (safe, no passwords or tokens logged)
@@ -55,6 +56,7 @@ app.use('/api/quotes', quoteRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/policies', policyRoutes);
+app.use('/api/group-life', groupLifeRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

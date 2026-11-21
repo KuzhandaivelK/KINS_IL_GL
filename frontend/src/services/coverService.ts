@@ -36,12 +36,13 @@ export const coverService = {
   /**
    * Fetches all covers with optional search and type filter
    */
-  async getCovers(search?: string, type?: string, activeOnly?: boolean): Promise<{ success: boolean; covers: CoverListItem[]; message?: string }> {
+  async getCovers(search?: string, type?: string, activeOnly?: boolean, lob?: string): Promise<{ success: boolean; covers: CoverListItem[]; message?: string }> {
     try {
       const query = new URLSearchParams();
       if (search) query.append('search', search);
       if (type && type !== 'ALL') query.append('type', type);
       if (activeOnly) query.append('activeOnly', 'true');
+      if (lob && lob !== 'ALL') query.append('lob', lob);
 
       const url = `${API_BASE}${query.toString() ? '?' + query.toString() : ''}`;
       const res = await fetch(url, { method: 'GET', credentials: 'include' });

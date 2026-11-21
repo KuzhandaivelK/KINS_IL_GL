@@ -20,6 +20,7 @@ export interface CoverListItem {
   rateAppliedOn?: string | null;
   saPerc?: number | null;
   saCalc?: string | null;
+  coverLob?: 'IL' | 'GL' | 'BOTH' | string;
   createdAt?: string | null;
   createdBy?: string | null;
   modifiedAt?: string | null;
@@ -40,6 +41,7 @@ export interface CreateCoverInput {
   rateAppliedOn?: string | null;
   saPerc?: number | null;
   saCalc?: string | null;
+  coverLob?: 'IL' | 'GL' | 'BOTH' | string;
 }
 
 export interface UpdateCoverInput {
@@ -55,4 +57,5 @@ export interface UpdateCoverInput {
   rateAppliedOn?: string | null;
   saPerc?: number | null;
   saCalc?: string | null;
+  coverLob?: 'IL' | 'GL' | 'BOTH' | string;
 }

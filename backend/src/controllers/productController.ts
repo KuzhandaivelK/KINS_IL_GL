@@ -33,6 +33,7 @@ const createProductSchema = z.object({
   PROD_LOAN_YN: z.enum(['Y', 'N']).optional().default('N'),
   PROD_MAT_YN: z.enum(['Y', 'N']).optional().default('N'),
   PROD_WITHDRAW_YN: z.enum(['Y', 'N']).optional().default('N'),
+  PROD_LOB: z.enum(['IL', 'GL', 'BOTH']).optional().default('IL'),
   covers: z.array(prodCoverSchema).optional().default([])
 });
 
@@ -57,6 +58,7 @@ const updateProductSchema = z.object({
   PROD_LOAN_YN: z.enum(['Y', 'N']).optional().default('N'),
   PROD_MAT_YN: z.enum(['Y', 'N']).optional().default('N'),
   PROD_WITHDRAW_YN: z.enum(['Y', 'N']).optional().default('N'),
+  PROD_LOB: z.enum(['IL', 'GL', 'BOTH']).optional(),
   covers: z.array(prodCoverSchema).optional()
 });
 
@@ -68,8 +70,9 @@ export const productController = {
     try {
       const search = req.query.search as string | undefined;
       const prodType = req.query.prodType as string | undefined;
+      const lob = req.query.lob as string | undefined;
 
-      const products = await productRepository.findAll(search, prodType);
+      const products = await productRepository.findAll(search, prodType, lob);
       res.json({
         success: true,
         count: products.length,

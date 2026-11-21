@@ -15,7 +15,8 @@ const createCoverSchema = z.object({
   maxSa: z.number().min(0).optional().nullable(),
   rateAppliedOn: z.string().max(3).optional().nullable(),
   saPerc: z.number().min(0).max(100).optional().nullable(),
-  saCalc: z.string().max(1).optional().nullable()
+  saCalc: z.string().max(1).optional().nullable(),
+  coverLob: z.enum(['IL', 'GL', 'BOTH']).optional().default('IL')
 });
 
 const updateCoverSchema = z.object({
@@ -30,7 +31,8 @@ const updateCoverSchema = z.object({
   maxSa: z.number().min(0).optional().nullable(),
   rateAppliedOn: z.string().max(3).optional().nullable(),
   saPerc: z.number().min(0).max(100).optional().nullable(),
-  saCalc: z.string().max(1).optional().nullable()
+  saCalc: z.string().max(1).optional().nullable(),
+  coverLob: z.enum(['IL', 'GL', 'BOTH']).optional()
 });
 
 export class CoverController {
@@ -59,8 +61,9 @@ export class CoverController {
       const search = req.query.search as string | undefined;
       const type = req.query.type as string | undefined;
       const activeOnly = req.query.activeOnly === 'true';
+      const lob = req.query.lob as string | undefined;
 
-      const covers = await coverRepository.findAll(search, type, activeOnly);
+      const covers = await coverRepository.findAll(search, type, activeOnly, lob);
       res.status(200).json({
         success: true,
         data: { covers }
