@@ -20,6 +20,7 @@ export interface ProposalInfoRecord {
   PROP_PREM_PAY_TERM: number;
   PROP_SUM_ASSURED: number;
   PROP_PAY_FREQ: PaymentFrequency;
+  PROP_MOP?: string | null;
   PROP_STATUS: ProposalStatus;
   PROP_CURRENT_LEVEL: number;
   PROP_ASSIGNED_ROLE: string;
@@ -187,6 +188,7 @@ export interface CreateProposalInput {
     PROP_PREM_PAY_TERM: number;
     PROP_SUM_ASSURED: number;
     PROP_PAY_FREQ?: PaymentFrequency;
+    PROP_MOP?: string;
   };
   assured: {
     PAS_NAME: string;
@@ -292,3 +294,9 @@ export interface TariffRateCalculationResponse {
   taxAmount: number;
   totalPayable: number;
 }
+
+export interface MopCodeOption {
+  codeSubCode: string;
+  codeSubCodeDesc: string;
+}
+

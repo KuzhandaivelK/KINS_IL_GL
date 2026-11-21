@@ -10,6 +10,9 @@ router.use(authMiddleware);
 // Tariff calculation endpoint (invokes PKG_PROPOSAL_TARIFF -> PKG_TARIFF)
 router.post('/calculate-tariff', proposalController.calculateTariff);
 
+// MOP lookup codes endpoint
+router.get('/mop-codes', proposalController.getMopCodes);
+
 // CRUD Endpoints
 router.get('/', proposalController.getProposals);
 router.get('/:id', proposalController.getProposalById);

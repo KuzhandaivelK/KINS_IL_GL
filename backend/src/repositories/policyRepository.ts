@@ -40,6 +40,7 @@ export const policyRepository = {
           p.POL_PREM_PAY_TERM,
           p.POL_SUM_ASSURED,
           p.POL_PAY_FREQ,
+          p.POL_MOP,
           p.POL_STATUS,
           p.POL_APPROVAL_LEVEL,
           p.POL_APPROVED_BY,
@@ -112,6 +113,7 @@ export const policyRepository = {
           p.POL_PREM_PAY_TERM,
           p.POL_SUM_ASSURED,
           p.POL_PAY_FREQ,
+          p.POL_MOP,
           p.POL_STATUS,
           p.POL_APPROVAL_LEVEL,
           p.POL_APPROVED_BY,
@@ -373,13 +375,13 @@ export const policyRepository = {
         INSERT INTO T_POLICY_INFO (
           POL_ID, POL_NO, POL_UID, PROP_NO, POL_DATE, POL_ISSUE_DATE,
           POL_INCEPTION_DATE, POL_MATURITY_DATE, POL_PROD_CODE, POL_PLAN_TYPE,
-          POL_TERM, POL_PREM_PAY_TERM, POL_SUM_ASSURED, POL_PAY_FREQ,
+          POL_TERM, POL_PREM_PAY_TERM, POL_SUM_ASSURED, POL_PAY_FREQ, POL_MOP,
           POL_STATUS, POL_APPROVAL_LEVEL, IS_ACTIVE, CREATED_BY, CREATED_ON
         )
         VALUES (
           SEQ_POL_ID.NEXTVAL, :polNo, :polUid, :propNo, SYSDATE, SYSDATE,
           SYSDATE, ADD_MONTHS(SYSDATE, :termMonths), :prodCode, :planType,
-          :term, :premPayTerm, :sumAssured, :payFreq,
+          :term, :premPayTerm, :sumAssured, :payFreq, :mop,
           'PENDING_APPROVAL', 1, 'Y', :createdBy, SYSDATE
         )
       `;
@@ -394,6 +396,7 @@ export const policyRepository = {
         premPayTerm: proposal.info.PROP_PREM_PAY_TERM,
         sumAssured: proposal.info.PROP_SUM_ASSURED,
         payFreq: proposal.info.PROP_PAY_FREQ,
+        mop: proposal.info.PROP_MOP || 'Y',
         createdBy: username.substring(0, 26)
       });
 

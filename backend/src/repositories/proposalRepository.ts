@@ -38,6 +38,7 @@ export const proposalRepository = {
           p.PROP_PREM_PAY_TERM,
           p.PROP_SUM_ASSURED,
           p.PROP_PAY_FREQ,
+          p.PROP_MOP,
           p.PROP_STATUS,
           p.PROP_CURRENT_LEVEL,
           p.PROP_ASSIGNED_ROLE,
@@ -106,6 +107,7 @@ export const proposalRepository = {
           p.PROP_PREM_PAY_TERM,
           p.PROP_SUM_ASSURED,
           p.PROP_PAY_FREQ,
+          p.PROP_MOP,
           p.PROP_STATUS,
           p.PROP_CURRENT_LEVEL,
           p.PROP_ASSIGNED_ROLE,
@@ -505,13 +507,13 @@ export const proposalRepository = {
         INSERT INTO T_PROPOSAL_INFO (
           PROP_ID, PROP_NO, PROP_UID, PROP_DATE,
           PROP_PROD_CODE, PROP_PLAN_TYPE, PROP_TERM, PROP_PREM_PAY_TERM,
-          PROP_SUM_ASSURED, PROP_PAY_FREQ, PROP_STATUS, PROP_CURRENT_LEVEL,
+          PROP_SUM_ASSURED, PROP_PAY_FREQ, PROP_MOP, PROP_STATUS, PROP_CURRENT_LEVEL,
           PROP_ASSIGNED_ROLE, IS_ACTIVE, CREATED_BY, CREATED_ON
         )
         VALUES (
           SEQ_PROP_ID.NEXTVAL, :propNo, :propUid, SYSDATE,
           :prodCode, :planType, :term, :premPayTerm,
-          :sumAssured, :payFreq, 'DRAFT', 1,
+          :sumAssured, :payFreq, :mop, 'DRAFT', 1,
           'MAKER', 'Y', :createdBy, SYSDATE
         )
       `;
@@ -524,6 +526,7 @@ export const proposalRepository = {
         premPayTerm: data.info.PROP_PREM_PAY_TERM || data.info.PROP_TERM,
         sumAssured: data.info.PROP_SUM_ASSURED,
         payFreq: data.info.PROP_PAY_FREQ || 'ANNUAL',
+        mop: data.info.PROP_MOP || 'Y',
         createdBy: username.substring(0, 26)
       });
 
@@ -815,6 +818,7 @@ export const proposalRepository = {
           PROP_PREM_PAY_TERM = :premPayTerm,
           PROP_SUM_ASSURED = :sumAssured,
           PROP_PAY_FREQ = :payFreq,
+          PROP_MOP = :mop,
           MODIFIED_BY = :modifiedBy,
           MODIFIED_ON = SYSDATE
         WHERE PROP_NO = :propNo
@@ -827,6 +831,7 @@ export const proposalRepository = {
         premPayTerm: data.info.PROP_PREM_PAY_TERM || data.info.PROP_TERM,
         sumAssured: data.info.PROP_SUM_ASSURED,
         payFreq: data.info.PROP_PAY_FREQ || 'ANNUAL',
+        mop: data.info.PROP_MOP || 'Y',
         modifiedBy: username.substring(0, 26)
       });
 
@@ -1245,6 +1250,34 @@ export const proposalRepository = {
         } catch (_) {}
       }
       throw err;
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Fetch Mode of Payment (MOP) code list from STBL_CODE
+   */
+  async getMopCodes(): Promise<Array<{ codeSubCode: string; codeSubCodeDesc: string }>> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const sql = `
+        SELECT CODE_SUB_CODE, CODE_SUB_CODE_DESC 
+        FROM STBL_CODE 
+        WHERE CODE = 'MOP'
+        ORDER BY CODE_SUB_CODE
+      `;
+      const res = await connection.execute<{ CODE_SUB_CODE: string; CODE_SUB_CODE_DESC: string }>(
+        sql,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      if (!res.rows) return [];
+      return res.rows.map(r => ({
+        codeSubCode: r.CODE_SUB_CODE,
+        codeSubCodeDesc: r.CODE_SUB_CODE_DESC
+      }));
     } finally {
       await releaseConnection(connection);
     }

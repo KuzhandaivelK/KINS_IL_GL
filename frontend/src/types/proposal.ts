@@ -21,6 +21,7 @@ export interface ProposalInfoItem {
   PROP_PREM_PAY_TERM: number;
   PROP_SUM_ASSURED: number;
   PROP_PAY_FREQ: PaymentFrequency;
+  PROP_MOP?: string;
   PROP_STATUS: ProposalStatus;
   PROP_CURRENT_LEVEL: number;
   PROP_ASSIGNED_ROLE: string;
@@ -156,6 +157,7 @@ export interface ProposalFormData {
     PROP_PREM_PAY_TERM: number;
     PROP_SUM_ASSURED: number;
     PROP_PAY_FREQ: PaymentFrequency;
+    PROP_MOP?: string;
   };
   assured: ProposalAssured;
   riders: ProposalRider[];
@@ -183,4 +185,9 @@ export interface TariffRateCalculationResult {
   installmentPremium: number;
   taxAmount: number;
   totalPayable: number;
+}
+
+export interface MopCodeOption {
+  codeSubCode: string;
+  codeSubCodeDesc: string;
 }

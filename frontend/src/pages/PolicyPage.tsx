@@ -452,7 +452,7 @@ export const PolicyPage: React.FC = () => {
                           <td className="py-4 px-4 text-right font-semibold text-emerald-600 whitespace-nowrap">
                             ${Number(p.TOTAL_PAYABLE || 0).toLocaleString()}
                             <div className="text-[11px] font-normal text-gray-400">
-                              {p.POL_PAY_FREQ}
+                              {p.POL_PAY_FREQ} {p.POL_MOP ? `• MOP: ${p.POL_MOP}` : ''}
                             </div>
                           </td>
 
@@ -744,8 +744,10 @@ export const PolicyPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-gray-100">
-                  <span className="text-gray-500">Modal Factor ({policyDetail.info.POL_PAY_FREQ}):</span>
-                  <span className="font-mono text-gray-700">{policyDetail.premiumSummary?.PPS_MODAL_FACTOR || 1.0}</span>
+                  <span className="text-gray-500">Mode of Payment (MOP) & Frequency:</span>
+                  <span className="font-semibold text-gray-900">
+                    {policyDetail.info.POL_MOP ? `MOP: ${policyDetail.info.POL_MOP} • ` : ''}{policyDetail.info.POL_PAY_FREQ} (Factor: {policyDetail.premiumSummary?.PPS_MODAL_FACTOR || 1.0})
+                  </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-gray-100">
                   <span className="text-gray-500">Modal Installment Premium:</span>
@@ -1037,8 +1039,8 @@ export const PolicyPage: React.FC = () => {
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Premium Payment Frequency:</span>
-                  <p className="font-semibold text-gray-800">{policyDetail.info.POL_PAY_FREQ}</p>
+                  <span className="text-gray-500">Premium Frequency & MOP:</span>
+                  <p className="font-semibold text-gray-800">{policyDetail.info.POL_PAY_FREQ} {policyDetail.info.POL_MOP ? `(MOP: ${policyDetail.info.POL_MOP})` : ''}</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Maturity / Survival Benefit:</span>
@@ -1108,7 +1110,7 @@ export const PolicyPage: React.FC = () => {
                 </div>
               </div>
               <div className="p-3 bg-blue-50 border border-blue-200 rounded flex justify-between items-center text-sm font-sans font-bold text-blue-950">
-                <span>TOTAL PERIODIC INSTALLMENT PAYABLE ({policyDetail.info.POL_PAY_FREQ}):</span>
+                <span>TOTAL PERIODIC INSTALLMENT PAYABLE ({policyDetail.info.POL_PAY_FREQ}{policyDetail.info.POL_MOP ? ` / MOP: ${policyDetail.info.POL_MOP}` : ''}):</span>
                 <span className="text-lg font-mono text-blue-900">
                   ${Number(policyDetail.premiumSummary?.PPS_TOTAL_PAYABLE || 0).toLocaleString()}
                 </span>

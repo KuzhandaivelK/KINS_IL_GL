@@ -3,7 +3,8 @@ import {
   ProposalDetail,
   ProposalFormData,
   TariffRateCalculationResult,
-  PaymentFrequency
+  PaymentFrequency,
+  MopCodeOption
 } from '../types/proposal';
 
 const API_BASE_URL = '/api/proposals';
@@ -56,6 +57,23 @@ export const proposalService = {
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.message || 'Failed to fetch proposal details');
+    }
+    return data;
+  },
+
+  /**
+   * Fetch MOP (Mode of Payment) options from STBL_CODE
+   */
+  async getMopCodes(): Promise<{ success: boolean; count: number; options: MopCodeOption[] }> {
+    const res = await fetch(`${API_BASE_URL}/mop-codes`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to fetch MOP codes');
     }
     return data;
   },

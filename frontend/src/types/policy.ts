@@ -24,6 +24,7 @@ export interface PolicyInfoRecord {
   POL_PREM_PAY_TERM: number;
   POL_SUM_ASSURED: number;
   POL_PAY_FREQ: PolicyPaymentFrequency;
+  POL_MOP?: string | null;
   POL_STATUS: PolicyStatus;
   POL_APPROVAL_LEVEL: number;
   POL_APPROVED_BY?: string | null;

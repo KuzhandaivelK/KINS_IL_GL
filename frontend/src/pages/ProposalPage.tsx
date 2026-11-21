@@ -50,7 +50,8 @@ import {
   ProposalRider,
   ProposalDiscLoad,
   ProposalBeneficiary,
-  ProposalExclusion
+  ProposalExclusion,
+  MopCodeOption
 } from '../types/proposal';
 import { ProductItem } from '../types/product';
 import { CoverListItem } from '../types/cover';
@@ -83,7 +84,8 @@ const emptyFormData: ProposalFormData = {
     PROP_TERM: 20,
     PROP_PREM_PAY_TERM: 20,
     PROP_SUM_ASSURED: 1000000,
-    PROP_PAY_FREQ: 'ANNUAL'
+    PROP_PAY_FREQ: 'ANNUAL',
+    PROP_MOP: 'Y'
   },
   assured: {
     PAS_NAME: '',
@@ -161,6 +163,7 @@ export const ProposalPage: React.FC = () => {
   const [proposals, setProposals] = useState<ProposalInfoItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [covers, setCovers] = useState<CoverListItem[]>([]);
+  const [mopOptions, setMopOptions] = useState<MopCodeOption[]>([]);
   const [proposalDetail, setProposalDetail] = useState<ProposalDetail | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -184,13 +187,14 @@ export const ProposalPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // Load master lookups: Products and Covers
+  // Load master lookups: Products, Covers and MOP Codes
   useEffect(() => {
     const loadMasters = async () => {
       try {
-        const [prodRes, covRes] = await Promise.all([
+        const [prodRes, covRes, mopRes] = await Promise.all([
           productService.getProducts(),
-          coverService.getCovers()
+          coverService.getCovers(),
+          proposalService.getMopCodes().catch(() => ({ success: true, count: 0, options: [] }))
         ]);
         if (prodRes.success && prodRes.products) {
           setProducts(prodRes.products);
@@ -204,8 +208,11 @@ export const ProposalPage: React.FC = () => {
         if (covRes.success && covRes.covers) {
           setCovers(covRes.covers);
         }
+        if (mopRes.success && mopRes.options) {
+          setMopOptions(mopRes.options);
+        }
       } catch (err) {
-        console.error('Error loading product/cover masters:', err);
+        console.error('Error loading product/cover/MOP masters:', err);
       }
     };
     loadMasters();
@@ -274,7 +281,8 @@ export const ProposalPage: React.FC = () => {
             PROP_TERM: p.info.PROP_TERM,
             PROP_PREM_PAY_TERM: p.info.PROP_PREM_PAY_TERM,
             PROP_SUM_ASSURED: p.info.PROP_SUM_ASSURED,
-            PROP_PAY_FREQ: p.info.PROP_PAY_FREQ
+            PROP_PAY_FREQ: p.info.PROP_PAY_FREQ,
+            PROP_MOP: p.info.PROP_MOP || 'Y'
           },
           assured: {
             ...p.assured,
@@ -857,7 +865,7 @@ export const ProposalPage: React.FC = () => {
                           <td className="py-4 px-4 text-right font-semibold text-emerald-600 whitespace-nowrap">
                             ${Number(p.TOTAL_PAYABLE || 0).toLocaleString()}
                             <div className="text-[11px] font-normal text-gray-400">
-                              {p.PROP_PAY_FREQ}
+                              {p.PROP_PAY_FREQ} {p.PROP_MOP ? `• MOP: ${p.PROP_MOP}` : ''}
                             </div>
                           </td>
 
@@ -1046,6 +1054,51 @@ export const ProposalPage: React.FC = () => {
                       <option value="SEMI_ANNUAL">Semi-Annual (0.52x)</option>
                       <option value="QUARTERLY">Quarterly (0.265x)</option>
                       <option value="MONTHLY">Monthly (0.088x)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Mode of Payment (MOP) <span className="text-red-500">*</span></span>
+                      <span className="text-[10px] text-blue-600 font-mono">STBL_CODE (MOP)</span>
+                    </label>
+                    <select
+                      value={formData.info.PROP_MOP || 'Y'}
+                      onChange={e => {
+                        const newMop = e.target.value;
+                        const freqMap: Record<string, PaymentFrequency> = {
+                          'Y': 'ANNUAL',
+                          'H': 'SEMI_ANNUAL',
+                          'Q': 'QUARTERLY',
+                          'M': 'MONTHLY',
+                          'S': 'SINGLE'
+                        };
+                        setFormData(prev => ({
+                          ...prev,
+                          info: {
+                            ...prev.info,
+                            PROP_MOP: newMop,
+                            PROP_PAY_FREQ: freqMap[newMop] || prev.info.PROP_PAY_FREQ
+                          }
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      {mopOptions.length > 0 ? (
+                        mopOptions.map(opt => (
+                          <option key={opt.codeSubCode} value={opt.codeSubCode}>
+                            {opt.codeSubCode} &mdash; {opt.codeSubCodeDesc}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Y">Y &mdash; Yearly</option>
+                          <option value="H">H &mdash; Half yearly</option>
+                          <option value="Q">Q &mdash; Quarterly</option>
+                          <option value="M">M &mdash; Monthly</option>
+                          <option value="S">S &mdash; Single</option>
+                        </>
+                      )}
                     </select>
                   </div>
 

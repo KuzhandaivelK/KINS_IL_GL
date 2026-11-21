@@ -64,7 +64,8 @@ const createProposalSchema = z.object({
     PROP_TERM: z.number().int().min(1).max(100),
     PROP_PREM_PAY_TERM: z.number().int().min(1).max(100),
     PROP_SUM_ASSURED: z.number().min(1000),
-    PROP_PAY_FREQ: z.enum(['ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY', 'MONTHLY', 'SINGLE']).optional().default('ANNUAL')
+    PROP_PAY_FREQ: z.enum(['ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY', 'MONTHLY', 'SINGLE']).optional().default('ANNUAL'),
+    PROP_MOP: z.string().max(30).optional().default('Y')
   }),
   assured: assuredInputSchema,
   riders: z.array(riderInputSchema).optional().default([]),
@@ -162,6 +163,28 @@ export const proposalController = {
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve proposal detail',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/proposals/mop-codes
+   * Retrieve MOP dropdown options from STBL_CODE
+   */
+  async getMopCodes(_req: Request, res: Response): Promise<void> {
+    try {
+      const options = await proposalRepository.getMopCodes();
+      res.json({
+        success: true,
+        count: options.length,
+        options
+      });
+    } catch (error: any) {
+      console.error('Error in getMopCodes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve Mode of Payment codes from database',
         error: error.message
       });
     }
