@@ -349,6 +349,11 @@ export const policyRepository = {
         throw new Error(`Proposal '${code}' not found.`);
       }
 
+      // 1.1 Enforce First Premium Receipt (FPR) gate
+      if (proposal.info.FPR_STATUS !== 'COLLECTED') {
+        throw new Error(`First Premium Receipt (FPR) must be collected before Proposal '${code}' can be approved and converted to Policy.`);
+      }
+
       // Check if already converted
       const checkExist = `SELECT POL_NO FROM T_POLICY_INFO WHERE PROP_NO = :code`;
       const existRes = await connection.execute<{ POL_NO: string }>(checkExist, { code }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
@@ -371,17 +376,30 @@ export const policyRepository = {
       const termYears = proposal.info.PROP_TERM;
 
       // 3. Insert T_POLICY_INFO
+      const freqMonths =
+        proposal.info.PROP_PAY_FREQ === 'MONTHLY'
+          ? 1
+          : proposal.info.PROP_PAY_FREQ === 'QUARTERLY'
+          ? 3
+          : proposal.info.PROP_PAY_FREQ === 'SEMI_ANNUAL'
+          ? 6
+          : 12;
+
+      const installmentPrem = Number(proposal.premiumSummary?.PPS_INSTALLMENT_PREM || proposal.premiumSummary?.PPS_TOTAL_PAYABLE || 500);
+
       const insertPolSql = `
         INSERT INTO T_POLICY_INFO (
           POL_ID, POL_NO, POL_UID, PROP_NO, POL_DATE, POL_ISSUE_DATE,
           POL_INCEPTION_DATE, POL_MATURITY_DATE, POL_PROD_CODE, POL_PLAN_TYPE,
           POL_TERM, POL_PREM_PAY_TERM, POL_SUM_ASSURED, POL_PAY_FREQ, POL_MOP,
+          POL_NEXT_DUE_DATE, POL_PAID_TO_DATE, POL_LAST_PREM_DATE, POL_TOTAL_PREM_PAID, POL_INSTALLMENT_PREM,
           POL_STATUS, POL_APPROVAL_LEVEL, IS_ACTIVE, CREATED_BY, CREATED_ON
         )
         VALUES (
           SEQ_POL_ID.NEXTVAL, :polNo, :polUid, :propNo, SYSDATE, SYSDATE,
           SYSDATE, ADD_MONTHS(SYSDATE, :termMonths), :prodCode, :planType,
           :term, :premPayTerm, :sumAssured, :payFreq, :mop,
+          ADD_MONTHS(SYSDATE, :freqMonths), ADD_MONTHS(SYSDATE, :freqMonths), SYSDATE, :installmentPrem, :installmentPrem,
           'PENDING_APPROVAL', 1, 'Y', :createdBy, SYSDATE
         )
       `;
@@ -397,6 +415,8 @@ export const policyRepository = {
         sumAssured: proposal.info.PROP_SUM_ASSURED,
         payFreq: proposal.info.PROP_PAY_FREQ,
         mop: proposal.info.PROP_MOP || 'Y',
+        freqMonths,
+        installmentPrem,
         createdBy: username.substring(0, 26)
       });
 

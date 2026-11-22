@@ -18,6 +18,7 @@ import { QuickQuotePage } from './pages/QuickQuotePage';
 import { WorkflowPage } from './pages/WorkflowPage';
 import { ProposalPage } from './pages/ProposalPage';
 import { PolicyPage } from './pages/PolicyPage';
+import { PolicyServicingPage } from './pages/PolicyServicingPage';
 
 export const App: React.FC = () => {
   return (
@@ -48,7 +49,8 @@ export const App: React.FC = () => {
             <Route path="/product-configuration/products" element={<ProductsPage />} />
             <Route path="/policy-administration" element={<PolicyPage />} />
             <Route path="/underwriting" element={<PlaceholderModulePage />} />
-            <Route path="/premium-collection" element={<PlaceholderModulePage />} />
+            <Route path="/premium-collection" element={<PolicyServicingPage />} />
+            <Route path="/policy-servicing" element={<PolicyServicingPage />} />
             <Route path="/claims-management" element={<PlaceholderModulePage />} />
             <Route path="/commission-management" element={<PlaceholderModulePage />} />
             <Route path="/reinsurance" element={<PlaceholderModulePage />} />

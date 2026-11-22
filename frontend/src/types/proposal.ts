@@ -22,6 +22,10 @@ export interface ProposalInfoItem {
   PROP_SUM_ASSURED: number;
   PROP_PAY_FREQ: PaymentFrequency;
   PROP_MOP?: string;
+  FPR_STATUS?: string;
+  FPR_RECEIPT_NO?: string;
+  FPR_AMOUNT?: number;
+  FPR_DATE?: string;
   PROP_STATUS: ProposalStatus;
   PROP_CURRENT_LEVEL: number;
   PROP_ASSIGNED_ROLE: string;

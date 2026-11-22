@@ -34,7 +34,8 @@ import {
   HeartPulse,
   HeartHandshake,
   ArrowUpRight,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Receipt
 } from 'lucide-react';
 import { proposalService } from '../services/proposalService';
 import { policyService } from '../services/policyService';
@@ -875,8 +876,19 @@ export const ProposalPage: React.FC = () => {
                             >
                               {p.PROP_STATUS}
                             </span>
-                            <div className="text-[11px] text-gray-500 mt-1">
+                            <div className="text-[11px] text-gray-500 mt-0.5">
                               Level {p.PROP_CURRENT_LEVEL} ({p.PROP_ASSIGNED_ROLE})
+                            </div>
+                            <div className="mt-1">
+                              {p.FPR_STATUS === 'COLLECTED' ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                  ✓ FPR: {p.FPR_RECEIPT_NO || 'COLLECTED'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                  ⏳ Awaiting FPR
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -899,6 +911,15 @@ export const ProposalPage: React.FC = () => {
                               >
                                 <ShieldCheck className="w-4 h-4" />
                               </button>
+                              {p.FPR_STATUS !== 'COLLECTED' && p.PROP_STATUS !== 'DRAFT' && p.PROP_STATUS !== 'REJECTED' && (
+                                <button
+                                  onClick={() => navigate('/premium-collection')}
+                                  className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                  title="Collect First Premium Receipt (FPR)"
+                                >
+                                  <Receipt className="w-4 h-4" />
+                                </button>
+                              )}
                               {p.PROP_STATUS === 'CONVERTED' && (
                                 <button
                                   onClick={() => navigate('/policy-administration')}
@@ -2128,36 +2149,63 @@ export const ProposalPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="pt-2 flex items-center justify-between border-t border-emerald-200">
-                      <div className="text-xs text-gray-500">
-                        {isPolicyAdmin ? (
-                          <span>Executing conversion will generate a formal Policy Number and copy all life assured, riders, beneficiaries, and premium summaries into the Policy register.</span>
-                        ) : (
-                          <span className="text-amber-700 font-medium">Please login as Policy Admin (`policy_admin`) to execute policy conversion.</span>
+                    {/* First Premium Receipt (FPR) Gate Check */}
+                    {proposalDetail?.info.FPR_STATUS !== 'COLLECTED' ? (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-amber-900 text-xs">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          <span>First Premium Receipt (FPR) Required Before Policy Conversion</span>
+                        </div>
+                        <p className="text-xs text-amber-800">
+                          Regulatory underwriting policy requires that the First Premium Receipt (FPR) must be collected from the policyholder and verified in General Ledger before a Policy Contract can be officially incepted and approved.
+                        </p>
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => navigate('/premium-collection')}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-xs transition-colors"
+                          >
+                            <Receipt className="w-4 h-4" />
+                            <span>Collect First Premium in Policy Servicing</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-2 flex items-center justify-between border-t border-emerald-200">
+                        <div className="text-xs text-gray-500">
+                          <div className="text-emerald-700 font-bold mb-1 flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>First Premium Collected ({proposalDetail?.info.FPR_RECEIPT_NO || 'PAID'})</span>
+                          </div>
+                          {isPolicyAdmin ? (
+                            <span>Executing conversion will generate a formal Policy Number and copy all life assured, riders, beneficiaries, and premium summaries into the Policy register.</span>
+                          ) : (
+                            <span className="text-amber-700 font-medium">Please login as Policy Admin (`policy_admin`) to execute policy conversion.</span>
+                          )}
+                        </div>
+
+                        {isPolicyAdmin && (
+                          <button
+                            type="button"
+                            disabled={isConverting}
+                            onClick={handleConvertToPolicy}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold text-sm shadow-md transition-all hover:scale-[1.02]"
+                          >
+                            {isConverting ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Converting to Policy...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileSpreadsheet className="w-4 h-4" />
+                                <span>Convert to Policy</span>
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
-
-                      {isPolicyAdmin && (
-                        <button
-                          type="button"
-                          disabled={isConverting}
-                          onClick={handleConvertToPolicy}
-                          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold text-sm shadow-md transition-all hover:scale-[1.02]"
-                        >
-                          {isConverting ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Converting to Policy...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileSpreadsheet className="w-4 h-4" />
-                              <span>Convert to Policy</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 )}
 

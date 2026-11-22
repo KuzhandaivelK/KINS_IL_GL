@@ -15,6 +15,7 @@ import workflowRoutes from './routes/workflowRoutes';
 import proposalRoutes from './routes/proposalRoutes';
 import policyRoutes from './routes/policyRoutes';
 import groupLifeRoutes from './routes/groupLifeRoutes';
+import policyServicingRoutes from './routes/policyServicingRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -57,6 +58,7 @@ app.use('/api/workflows', workflowRoutes);
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/group-life', groupLifeRoutes);
+app.use('/api/policy-servicing', policyServicingRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

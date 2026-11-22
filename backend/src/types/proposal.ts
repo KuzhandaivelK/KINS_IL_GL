@@ -21,6 +21,10 @@ export interface ProposalInfoRecord {
   PROP_SUM_ASSURED: number;
   PROP_PAY_FREQ: PaymentFrequency;
   PROP_MOP?: string | null;
+  FPR_STATUS?: string | null;
+  FPR_RECEIPT_NO?: string | null;
+  FPR_AMOUNT?: number | null;
+  FPR_DATE?: Date | string | null;
   PROP_STATUS: ProposalStatus;
   PROP_CURRENT_LEVEL: number;
   PROP_ASSIGNED_ROLE: string;
