@@ -1,6 +1,7 @@
 import oracledb from 'oracledb';
 import crypto from 'crypto';
 import { getConnection, releaseConnection } from '../config/database';
+import { workflowAuthService } from '../services/workflowAuthService';
 import {
   ProposalInfoRecord,
   ProposalAssuredRecord,
@@ -657,11 +658,12 @@ export const proposalRepository = {
           )
         `;
         for (const b of data.beneficiaries) {
+          if (!b.PBEN_NAME || !b.PBEN_NAME.trim()) continue;
           await connection.execute(benInsertSql, {
             propNo,
             propUid,
             bName: b.PBEN_NAME.trim(),
-            bRel: b.PBEN_RELATION,
+            bRel: b.PBEN_RELATION || 'SPOUSE',
             bDob: b.PBEN_DOB ? b.PBEN_DOB.split('T')[0] : null,
             sharePct: b.PBEN_SHARE_PCT || 100,
             idType: b.PBEN_ID_TYPE || null,
@@ -972,11 +974,12 @@ export const proposalRepository = {
           )
         `;
         for (const b of data.beneficiaries) {
+          if (!b.PBEN_NAME || !b.PBEN_NAME.trim()) continue;
           await connection.execute(benInsertSql, {
             propNo: code,
             propUid,
             bName: b.PBEN_NAME.trim(),
-            bRel: b.PBEN_RELATION,
+            bRel: b.PBEN_RELATION || 'SPOUSE',
             bDob: b.PBEN_DOB ? b.PBEN_DOB.split('T')[0] : null,
             sharePct: b.PBEN_SHARE_PCT || 100,
             idType: b.PBEN_ID_TYPE || null,
@@ -1135,13 +1138,15 @@ export const proposalRepository = {
 
   /**
    * Process a workflow action (Submit, Underwrite Decision: Approve, Reject, Rework)
+   * Database-driven by MTBL_WORKFLOW_LEVEL, MTBL_WORKFLOW_LEVEL_UG_MAP, and MTBL_USER
    */
   async processWorkflowAction(
     propNo: string,
     action: 'SUBMIT' | 'APPROVE' | 'REJECT' | 'REWORK',
     comments: string,
     username: string = 'ADMIN',
-    userRole: string = 'MAKER'
+    userRole: string = 'MAKER',
+    userGroup?: string
   ): Promise<ProposalDetail> {
     let connection: oracledb.Connection | null = null;
     try {
@@ -1153,49 +1158,73 @@ export const proposalRepository = {
         throw new Error(`Proposal '${code}' not found.`);
       }
 
+      // Business rule validation: DRAFT / REWORK proposal cannot be approved directly
+      if (detail.info.PROP_STATUS === 'DRAFT' || detail.info.PROP_STATUS === 'REWORK') {
+        if (action === 'APPROVE') {
+          throw new Error('A draft proposal cannot be directly approved. Please submit for underwriting assessment first.');
+        }
+      }
+
+      // Determine active workflow code and level for validation
+      let activeWfCode = 'WF_PROP_CREATE';
+      let activeLevelNo = detail.info.PROP_CURRENT_LEVEL || 1;
+
+      if (detail.info.PROP_STATUS === 'UNDERWRITING' || detail.info.PROP_STATUS === 'SUBMITTED') {
+        activeWfCode = 'WF_UNDERWRITING';
+        activeLevelNo = detail.info.PROP_CURRENT_LEVEL || 1;
+      } else {
+        activeWfCode = 'WF_PROP_CREATE';
+        activeLevelNo = 1;
+      }
+
+      // Check database-driven authorization!
+      const effectiveGroup = userGroup || (await workflowAuthService.getUserGroup(username));
+      const authCheck = await workflowAuthService.checkPermission({
+        userId: username,
+        userGroup: effectiveGroup,
+        wfCode: activeWfCode,
+        levelNo: activeLevelNo,
+        action,
+        amount: detail.info.PROP_SUM_ASSURED
+      });
+
+      if (!authCheck.allowed) {
+        throw new Error(authCheck.reason || 'Action not permitted by workflow authority rules.');
+      }
+
       let newStatus = detail.info.PROP_STATUS;
       let newLevel = detail.info.PROP_CURRENT_LEVEL;
       let newRole = detail.info.PROP_ASSIGNED_ROLE;
-      let wfCode = 'WF_PROP_CREATE';
+      let wfCode = activeWfCode;
 
       if (action === 'SUBMIT') {
-        if (detail.info.PROP_STATUS === 'DRAFT' || detail.info.PROP_STATUS === 'REWORK') {
-          newStatus = 'SUBMITTED';
+        // Transition proposal directly to Underwriting for UWUSER review
+        newStatus = 'UNDERWRITING';
+        newLevel = 1;
+        newRole = 'UW_OFFICER';
+        wfCode = 'WF_UNDERWRITING';
+      } else if (action === 'APPROVE') {
+        // UWUSER or higher approves the underwritten proposal
+        const sa = Number(detail.info.PROP_SUM_ASSURED || 0);
+
+        // If sum assured exceeds UWUSER threshold ($2,500,000 limit), escalate to UWMGR
+        if (sa > 2500000 && (detail.info.PROP_CURRENT_LEVEL || 1) < 2) {
+          newStatus = 'UNDERWRITING';
+          newLevel = 2;
+          newRole = 'SR_UNDERWRITER';
+          wfCode = 'WF_UNDERWRITING';
+        } else {
+          // Underwriting approved - ready for UWMGR FPR collection and policy conversion!
+          newStatus = 'APPROVED';
           newLevel = 2;
           newRole = 'CHECKER';
-        } else if (detail.info.PROP_STATUS === 'SUBMITTED') {
-          // Transition from Proposal Creation workflow to Underwriting Workflow!
-          newStatus = 'UNDERWRITING';
-          newLevel = 1;
-          newRole = 'UW_OFFICER';
-          wfCode = 'WF_UNDERWRITING';
-        }
-      } else if (action === 'APPROVE') {
-        if (detail.info.PROP_STATUS === 'SUBMITTED') {
-          newStatus = 'UNDERWRITING';
-          newLevel = 1;
-          newRole = 'UW_OFFICER';
-          wfCode = 'WF_UNDERWRITING';
-        } else if (detail.info.PROP_STATUS === 'UNDERWRITING') {
-          // Check if higher authority level required based on Sum Assured
-          const sa = detail.info.PROP_SUM_ASSURED;
-          if (sa > 2500000 && newLevel < 3) {
-            newLevel = 3;
-            newRole = 'UW_COMMITTEE';
-          } else if (sa > 500000 && newLevel < 2) {
-            newLevel = 2;
-            newRole = 'SR_UNDERWRITER';
-          } else {
-            // Underwriting fully approved!
-            newStatus = 'APPROVED';
-            newRole = 'CHECKER';
-          }
           wfCode = 'WF_UNDERWRITING';
         }
       } else if (action === 'REWORK') {
         newStatus = 'REWORK';
         newLevel = 1;
         newRole = 'MAKER';
+        wfCode = 'WF_PROP_CREATE';
       } else if (action === 'REJECT') {
         newStatus = 'REJECTED';
       }

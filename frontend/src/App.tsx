@@ -19,6 +19,7 @@ import { WorkflowPage } from './pages/WorkflowPage';
 import { ProposalPage } from './pages/ProposalPage';
 import { PolicyPage } from './pages/PolicyPage';
 import { PolicyServicingPage } from './pages/PolicyServicingPage';
+import { WorkbasketPage } from './pages/WorkbasketPage';
 
 export const App: React.FC = () => {
   return (
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/workbasket" element={<WorkbasketPage />} />
             <Route path="/individual-life" element={<IndividualLifePage />} />
             <Route path="/individual-life/quick-quote" element={<QuickQuotePage />} />
             <Route path="/quick-quote" element={<Navigate to="/individual-life/quick-quote" replace />} />

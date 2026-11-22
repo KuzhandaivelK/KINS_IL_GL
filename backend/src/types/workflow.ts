@@ -20,6 +20,8 @@ export interface WorkflowLevelRecord {
   WFL_LEVEL_NO: number;
   WFL_LEVEL_NAME: string;
   WFL_ROLE_CODE: string;
+  WFL_USER_GROUP?: string | null;
+  AUTHORIZED_USER_GROUPS?: string[];
   WFL_MIN_AMOUNT?: number | null;
   WFL_MAX_AMOUNT?: number | null;
   WFL_SLA_HOURS?: number | null;
@@ -43,6 +45,8 @@ export interface WorkflowLevelInput {
   WFL_LEVEL_NO: number;
   WFL_LEVEL_NAME: string;
   WFL_ROLE_CODE: string;
+  WFL_USER_GROUP?: string | null;
+  AUTHORIZED_USER_GROUPS?: string[];
   WFL_MIN_AMOUNT?: number | null;
   WFL_MAX_AMOUNT?: number | null;
   WFL_SLA_HOURS?: number | null;

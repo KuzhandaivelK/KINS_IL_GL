@@ -2,7 +2,11 @@ import {
   WorkflowHead,
   WorkflowDetail,
   WorkflowFormData,
-  LookupItem
+  LookupItem,
+  UserGroupItem,
+  WorkflowPermissionResult,
+  WorkbasketItem,
+  WorkbasketSummary
 } from '../types/workflow';
 
 const API_BASE_URL = '/api/workflows';
@@ -60,9 +64,9 @@ export const workflowService = {
   },
 
   /**
-   * Fetch category and role lookups
+   * Fetch category, role and user group lookups
    */
-  async getLookups(): Promise<{ success: boolean; categories: LookupItem[]; roles: LookupItem[] }> {
+  async getLookups(): Promise<{ success: boolean; categories: LookupItem[]; roles: LookupItem[]; userGroups?: UserGroupItem[] }> {
     const res = await fetch(`${API_BASE_URL}/meta/lookups`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -72,6 +76,63 @@ export const workflowService = {
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.message || 'Failed to fetch lookups');
+    }
+    return data;
+  },
+
+  /**
+   * Fetch database-driven user groups with active user counts
+   */
+  async getUserGroups(): Promise<{ success: boolean; userGroups: UserGroupItem[] }> {
+    const res = await fetch(`${API_BASE_URL}/meta/user-groups`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to fetch user groups');
+    }
+    return data;
+  },
+
+  /**
+   * Check user permission against database workflow level
+   */
+  async checkPermission(params: {
+    wfCode: string;
+    levelNo: number;
+    action: 'SUBMIT' | 'APPROVE' | 'REJECT' | 'REWORK';
+    amount?: number;
+  }): Promise<{ success: boolean; permission: WorkflowPermissionResult }> {
+    const res = await fetch(`${API_BASE_URL}/check-permission`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(params)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to evaluate workflow permission');
+    }
+    return data;
+  },
+
+  /**
+   * Retrieve dynamic workbasket containing pending tasks for the authenticated user and group
+   */
+  async getWorkbasket(): Promise<{ success: boolean } & WorkbasketSummary> {
+    const res = await fetch(`${API_BASE_URL}/workbasket`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to retrieve workbasket');
     }
     return data;
   },

@@ -106,6 +106,7 @@ export const workflowRepository = {
           l.WFL_LEVEL_NO,
           l.WFL_LEVEL_NAME,
           l.WFL_ROLE_CODE,
+          l.WFL_USER_GROUP,
           l.WFL_MIN_AMOUNT,
           l.WFL_MAX_AMOUNT,
           l.WFL_SLA_HOURS,
@@ -129,9 +130,34 @@ export const workflowRepository = {
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
 
+      const levels = levelsResult.rows || [];
+
+      // Fetch mapped user groups for each level
+      const ugMapSql = `
+        SELECT WFL_LEVEL_NO, USER_GROUP
+        FROM MTBL_WORKFLOW_LEVEL_UG_MAP
+        WHERE WF_CODE = :wfCode
+      `;
+      const ugResult = await connection.execute<{ WFL_LEVEL_NO: number; USER_GROUP: string }>(
+        ugMapSql,
+        { wfCode: wfCode.trim().toUpperCase() },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const ugRows = ugResult.rows || [];
+
+      for (const lvl of levels) {
+        const groups = ugRows
+          .filter(u => u.WFL_LEVEL_NO === lvl.WFL_LEVEL_NO)
+          .map(u => u.USER_GROUP.toUpperCase());
+        if (lvl.WFL_USER_GROUP && !groups.includes(lvl.WFL_USER_GROUP.toUpperCase())) {
+          groups.push(lvl.WFL_USER_GROUP.toUpperCase());
+        }
+        lvl.AUTHORIZED_USER_GROUPS = groups;
+      }
+
       return {
         head,
-        levels: levelsResult.rows || []
+        levels
       };
     } finally {
       await releaseConnection(connection);
@@ -191,13 +217,13 @@ export const workflowRepository = {
       if (levels.length > 0) {
         const insertLevelSql = `
           INSERT INTO MTBL_WORKFLOW_LEVEL (
-            WFL_ID, WF_CODE, WFL_LEVEL_NO, WFL_LEVEL_NAME, WFL_ROLE_CODE,
+            WFL_ID, WF_CODE, WFL_LEVEL_NO, WFL_LEVEL_NAME, WFL_ROLE_CODE, WFL_USER_GROUP,
             WFL_MIN_AMOUNT, WFL_MAX_AMOUNT, WFL_SLA_HOURS,
             WFL_ALLOW_REJECT_YN, WFL_ALLOW_REWORK_YN, WFL_MANDATORY_DOC_YN,
             WFL_AUTO_ESCALATE_HOURS, IS_ACTIVE, CREATED_BY, CREATED_ON
           )
           VALUES (
-            SEQ_WFL_ID.NEXTVAL, :wfCode, :lvlNo, :lvlName, :roleCode,
+            SEQ_WFL_ID.NEXTVAL, :wfCode, :lvlNo, :lvlName, :roleCode, :userGroup,
             :minAmt, :maxAmt, :sla,
             :rejYn, :rewYn, :docYn,
             :escHours, :isActive, :createdBy, SYSDATE
@@ -206,11 +232,15 @@ export const workflowRepository = {
 
         for (let i = 0; i < levels.length; i++) {
           const lvl = levels[i];
+          const lvlNo = lvl.WFL_LEVEL_NO || (i + 1);
+          const uGroup = (lvl.WFL_USER_GROUP || 'ADMIN').toUpperCase();
+
           await connection.execute(insertLevelSql, {
             wfCode,
-            lvlNo: lvl.WFL_LEVEL_NO || (i + 1),
+            lvlNo,
             lvlName: lvl.WFL_LEVEL_NAME.trim(),
             roleCode: lvl.WFL_ROLE_CODE.trim().toUpperCase(),
+            userGroup: uGroup,
             minAmt: lvl.WFL_MIN_AMOUNT !== undefined && lvl.WFL_MIN_AMOUNT !== null ? lvl.WFL_MIN_AMOUNT : 0,
             maxAmt: lvl.WFL_MAX_AMOUNT !== undefined && lvl.WFL_MAX_AMOUNT !== null ? lvl.WFL_MAX_AMOUNT : null,
             sla: lvl.WFL_SLA_HOURS !== undefined && lvl.WFL_SLA_HOURS !== null ? lvl.WFL_SLA_HOURS : 24,
@@ -221,6 +251,23 @@ export const workflowRepository = {
             isActive: lvl.IS_ACTIVE === 'N' ? 'N' : 'Y',
             createdBy: username.substring(0, 26)
           });
+
+          // Insert into MTBL_WORKFLOW_LEVEL_UG_MAP
+          const userGroupsToMap = new Set<string>([uGroup, 'ADMIN']);
+          if (lvl.AUTHORIZED_USER_GROUPS && Array.isArray(lvl.AUTHORIZED_USER_GROUPS)) {
+            lvl.AUTHORIZED_USER_GROUPS.forEach(g => userGroupsToMap.add(g.toUpperCase()));
+          }
+
+          for (const ug of userGroupsToMap) {
+            await connection.execute(
+              `INSERT INTO MTBL_WORKFLOW_LEVEL_UG_MAP (
+                WF_CODE, WFL_LEVEL_NO, USER_GROUP, CAN_APPROVE_YN, CAN_REJECT_YN, CAN_REWORK_YN, CREATED_BY, CREATED_ON
+               ) VALUES (
+                :wfCode, :lvlNo, :userGroup, 'Y', 'Y', 'Y', :createdBy, SYSDATE
+               )`,
+              { wfCode, lvlNo, userGroup: ug, createdBy: username.substring(0, 26) }
+            );
+          }
         }
       }
 
@@ -291,18 +338,19 @@ export const workflowRepository = {
 
       // If levels array is provided, replace levels
       if (levels !== undefined) {
+        await connection.execute(`DELETE FROM MTBL_WORKFLOW_LEVEL_UG_MAP WHERE WF_CODE = :wfCode`, { wfCode: code });
         await connection.execute(`DELETE FROM MTBL_WORKFLOW_LEVEL WHERE WF_CODE = :wfCode`, { wfCode: code });
 
         if (levels.length > 0) {
           const insertLevelSql = `
             INSERT INTO MTBL_WORKFLOW_LEVEL (
-              WFL_ID, WF_CODE, WFL_LEVEL_NO, WFL_LEVEL_NAME, WFL_ROLE_CODE,
+              WFL_ID, WF_CODE, WFL_LEVEL_NO, WFL_LEVEL_NAME, WFL_ROLE_CODE, WFL_USER_GROUP,
               WFL_MIN_AMOUNT, WFL_MAX_AMOUNT, WFL_SLA_HOURS,
               WFL_ALLOW_REJECT_YN, WFL_ALLOW_REWORK_YN, WFL_MANDATORY_DOC_YN,
               WFL_AUTO_ESCALATE_HOURS, IS_ACTIVE, CREATED_BY, CREATED_ON, MODIFIED_BY, MODIFIED_ON
             )
             VALUES (
-              SEQ_WFL_ID.NEXTVAL, :wfCode, :lvlNo, :lvlName, :roleCode,
+              SEQ_WFL_ID.NEXTVAL, :wfCode, :lvlNo, :lvlName, :roleCode, :userGroup,
               :minAmt, :maxAmt, :sla,
               :rejYn, :rewYn, :docYn,
               :escHours, :isActive, :createdBy, SYSDATE, :modifiedBy, SYSDATE
@@ -311,11 +359,15 @@ export const workflowRepository = {
 
           for (let i = 0; i < levels.length; i++) {
             const lvl = levels[i];
+            const lvlNo = lvl.WFL_LEVEL_NO || (i + 1);
+            const uGroup = (lvl.WFL_USER_GROUP || 'ADMIN').toUpperCase();
+
             await connection.execute(insertLevelSql, {
               wfCode: code,
-              lvlNo: lvl.WFL_LEVEL_NO || (i + 1),
+              lvlNo,
               lvlName: lvl.WFL_LEVEL_NAME.trim(),
               roleCode: lvl.WFL_ROLE_CODE.trim().toUpperCase(),
+              userGroup: uGroup,
               minAmt: lvl.WFL_MIN_AMOUNT !== undefined && lvl.WFL_MIN_AMOUNT !== null ? lvl.WFL_MIN_AMOUNT : 0,
               maxAmt: lvl.WFL_MAX_AMOUNT !== undefined && lvl.WFL_MAX_AMOUNT !== null ? lvl.WFL_MAX_AMOUNT : null,
               sla: lvl.WFL_SLA_HOURS !== undefined && lvl.WFL_SLA_HOURS !== null ? lvl.WFL_SLA_HOURS : 24,
@@ -327,6 +379,23 @@ export const workflowRepository = {
               createdBy: username.substring(0, 26),
               modifiedBy: username.substring(0, 26)
             });
+
+            // Insert into MTBL_WORKFLOW_LEVEL_UG_MAP
+            const userGroupsToMap = new Set<string>([uGroup, 'ADMIN']);
+            if (lvl.AUTHORIZED_USER_GROUPS && Array.isArray(lvl.AUTHORIZED_USER_GROUPS)) {
+              lvl.AUTHORIZED_USER_GROUPS.forEach(g => userGroupsToMap.add(g.toUpperCase()));
+            }
+
+            for (const ug of userGroupsToMap) {
+              await connection.execute(
+                `INSERT INTO MTBL_WORKFLOW_LEVEL_UG_MAP (
+                  WF_CODE, WFL_LEVEL_NO, USER_GROUP, CAN_APPROVE_YN, CAN_REJECT_YN, CAN_REWORK_YN, CREATED_BY, CREATED_ON
+                 ) VALUES (
+                  :wfCode, :lvlNo, :userGroup, 'Y', 'Y', 'Y', :createdBy, SYSDATE
+                 )`,
+                { wfCode: code, lvlNo, userGroup: ug, createdBy: username.substring(0, 26) }
+              );
+            }
           }
         }
       }
@@ -359,6 +428,7 @@ export const workflowRepository = {
       connection = await getConnection();
       const code = wfCode.trim().toUpperCase();
 
+      await connection.execute(`DELETE FROM MTBL_WORKFLOW_LEVEL_UG_MAP WHERE WF_CODE = :wfCode`, { wfCode: code });
       await connection.execute(`DELETE FROM MTBL_WORKFLOW_LEVEL WHERE WF_CODE = :wfCode`, { wfCode: code });
       const res = await connection.execute(`DELETE FROM MTBL_WORKFLOW_HEAD WHERE WF_CODE = :wfCode`, { wfCode: code });
 

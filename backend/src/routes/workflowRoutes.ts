@@ -9,6 +9,11 @@ router.use(authMiddleware);
 
 // Meta routes
 router.get('/meta/lookups', workflowController.getLookups);
+router.get('/meta/user-groups', workflowController.getUserGroups);
+router.post('/check-permission', workflowController.checkPermission);
+
+// Workbasket route (Pending approvals for user group)
+router.get('/workbasket', workflowController.getWorkbasket);
 
 // CRUD routes
 router.get('/', workflowController.getWorkflows);

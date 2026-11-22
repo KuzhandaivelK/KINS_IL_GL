@@ -6,6 +6,8 @@ export interface WorkflowLevel {
   WFL_LEVEL_NO: number;
   WFL_LEVEL_NAME: string;
   WFL_ROLE_CODE: string;
+  WFL_USER_GROUP?: string | null;
+  AUTHORIZED_USER_GROUPS?: string[];
   WFL_MIN_AMOUNT?: number | null;
   WFL_MAX_AMOUNT?: number | null;
   WFL_SLA_HOURS?: number | null;
@@ -56,4 +58,47 @@ export interface WorkflowFormData {
 export interface LookupItem {
   code: string;
   label: string;
+}
+
+export interface UserGroupItem {
+  code: string;
+  name: string;
+  userCount: number;
+}
+
+export interface WorkflowPermissionResult {
+  allowed: boolean;
+  userGroup: string;
+  authorizedGroups: string[];
+  levelName: string;
+  currentLevel: number;
+  reason?: string;
+}
+
+export interface WorkbasketItem {
+  id: string;
+  type: 'PROPOSAL' | 'POLICY' | 'CLAIM' | 'SERVICING';
+  refNo: string;
+  customerName: string;
+  productName: string;
+  planType: string;
+  amount: number;
+  totalPayable: number;
+  status: string;
+  stageName: string;
+  requiredAction: string;
+  targetGroup: string;
+  priority: 'HIGH' | 'MEDIUM' | 'NORMAL';
+  createdOn: string;
+  fprStatus?: string;
+  navigationUrl: string;
+}
+
+export interface WorkbasketSummary {
+  userGroup: string;
+  totalPending: number;
+  proposalsCount: number;
+  policiesCount: number;
+  highPriorityCount: number;
+  items: WorkbasketItem[];
 }

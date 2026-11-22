@@ -1,14 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/AuthContext';
 import { STAT_CARDS_DATA, RECENT_ACTIVITIES_DATA } from '../data/dashboardMockData';
 import { StatCard } from '../components/StatCard';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { RecentActivities } from '../components/RecentActivities';
 import { QuickAccess } from '../components/QuickAccess';
-import { Calendar, Shield, Database, Sparkles } from 'lucide-react';
+import { Calendar, Shield, Database, Sparkles, Inbox, ArrowRight, Clock, CheckCircle } from 'lucide-react';
+import { workflowService } from '../services/workflowService';
+import { WorkbasketSummary } from '../types/workflow';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [workbasket, setWorkbasket] = useState<WorkbasketSummary | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchWb = async () => {
+      try {
+        const data = await workflowService.getWorkbasket();
+        if (isMounted) setWorkbasket(data);
+      } catch (_) {}
+    };
+    if (user) fetchWb();
+    return () => { isMounted = false; };
+  }, [user]);
 
   // Readable current date
   const todayFormatted = new Intl.DateTimeFormat('en-US', {
@@ -19,6 +36,7 @@ export const DashboardPage: React.FC = () => {
   }).format(new Date());
 
   const authenticatedUsername = user?.userName || user?.userId || 'Operations User';
+  const userGroup = (user?.userGroup || 'ADMIN').toUpperCase();
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -53,6 +71,43 @@ export const DashboardPage: React.FC = () => {
             <Calendar className="w-4 h-4 text-teal-accent" />
             <span className="font-medium">{todayFormatted}</span>
           </div>
+        </div>
+      </div>
+
+      {/* Role-Based Workbasket Alert Banner */}
+      <div className="bg-white rounded-2xl border border-blue-200/80 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+            <Inbox className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-gray-900">
+                My Pending Approvals Workbasket
+              </h2>
+              <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                (workbasket?.totalPending ?? 0) > 0 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-emerald-50 text-emerald-700'
+              }`}>
+                {workbasket?.totalPending ?? 0} Pending Tasks
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Filtered for operator group <strong>{userGroup}</strong>: {workbasket?.proposalsCount ?? 0} proposals and {workbasket?.policiesCount ?? 0} policies requiring your decision clearance.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/workbasket')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:scale-[1.02] active:scale-95"
+          >
+            <span>Open Workbasket</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

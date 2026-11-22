@@ -33,7 +33,8 @@ import {
   WorkflowLevel,
   WorkflowFormData,
   WorkflowCategory,
-  LookupItem
+  LookupItem,
+  UserGroupItem
 } from '../types/workflow';
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -58,6 +59,7 @@ const emptyFormData: WorkflowFormData = {
       WFL_LEVEL_NO: 1,
       WFL_LEVEL_NAME: 'Initial Verification',
       WFL_ROLE_CODE: 'MAKER',
+      WFL_USER_GROUP: 'DEUSER',
       WFL_MIN_AMOUNT: 0,
       WFL_MAX_AMOUNT: null,
       WFL_SLA_HOURS: 24,
@@ -79,6 +81,7 @@ export const WorkflowPage: React.FC = () => {
   const [workflows, setWorkflows] = useState<WorkflowHead[]>([]);
   const [categories, setCategories] = useState<LookupItem[]>([]);
   const [roles, setRoles] = useState<LookupItem[]>([]);
+  const [userGroups, setUserGroups] = useState<UserGroupItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -130,6 +133,9 @@ export const WorkflowPage: React.FC = () => {
       if (res.success) {
         setCategories(res.categories);
         setRoles(res.roles);
+        if (res.userGroups) {
+          setUserGroups(res.userGroups);
+        }
       }
     } catch (err: any) {
       console.error('Error fetching lookups:', err);
@@ -164,6 +170,7 @@ export const WorkflowPage: React.FC = () => {
           WFL_LEVEL_NO: 1,
           WFL_LEVEL_NAME: 'Initial Verification',
           WFL_ROLE_CODE: 'MAKER',
+          WFL_USER_GROUP: 'DEUSER',
           WFL_MIN_AMOUNT: 0,
           WFL_MAX_AMOUNT: null,
           WFL_SLA_HOURS: 24,
@@ -229,6 +236,7 @@ export const WorkflowPage: React.FC = () => {
       WFL_LEVEL_NO: nextNo,
       WFL_LEVEL_NAME: `Approval Stage ${nextNo}`,
       WFL_ROLE_CODE: nextNo === 2 ? 'CHECKER' : nextNo === 3 ? 'SR_UNDERWRITER' : 'ADMIN',
+      WFL_USER_GROUP: nextNo === 2 ? 'UWUSER' : nextNo === 3 ? 'UWMGR' : 'POLICY_ADMIN',
       WFL_MIN_AMOUNT: 0,
       WFL_MAX_AMOUNT: null,
       WFL_SLA_HOURS: 24,
@@ -917,8 +925,13 @@ export const WorkflowPage: React.FC = () => {
                           <div className="text-xs font-bold text-gray-900 line-clamp-1">
                             {lvl.WFL_LEVEL_NAME || `Stage ${lvl.WFL_LEVEL_NO}`}
                           </div>
-                          <div className="text-xs text-blue-600 font-medium mt-0.5">
-                            {roleObj ? roleObj.label : lvl.WFL_ROLE_CODE}
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {lvl.WFL_USER_GROUP || 'ADMIN'}
+                            </span>
+                            <span className="text-xs text-blue-600 font-medium truncate max-w-[120px]">
+                              {roleObj ? roleObj.label : lvl.WFL_ROLE_CODE}
+                            </span>
                           </div>
                           <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                             <Clock className="w-3 h-3" />
@@ -1003,9 +1016,9 @@ export const WorkflowPage: React.FC = () => {
                     </div>
 
                     {/* Role Code */}
-                    <div className="md:col-span-2">
+                    <div>
                       <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                        Assigned Role / Authority <span className="text-red-500">*</span>
+                        Functional Role Title <span className="text-red-500">*</span>
                       </label>
                       <select
                         value={level.WFL_ROLE_CODE}
@@ -1017,6 +1030,39 @@ export const WorkflowPage: React.FC = () => {
                             {r.label} ({r.code})
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    {/* Authorized User Security Group (Database-Driven) */}
+                    <div>
+                      <label className="block text-xs font-semibold text-indigo-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5" />
+                          Authorized User Group <span className="text-red-500">*</span>
+                        </span>
+                        <span className="text-[10px] text-gray-500 lowercase font-normal">Controls action buttons</span>
+                      </label>
+                      <select
+                        value={level.WFL_USER_GROUP || 'ADMIN'}
+                        onChange={e => handleLevelChange(index, 'WFL_USER_GROUP', e.target.value)}
+                        className="w-full px-3 py-2 border border-indigo-200 bg-indigo-50/20 text-indigo-900 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        {userGroups.map(ug => (
+                          <option key={ug.code} value={ug.code}>
+                            {ug.code} - {ug.name} ({ug.userCount} users)
+                          </option>
+                        ))}
+                        {userGroups.length === 0 && (
+                          <>
+                            <option value="ADMIN">ADMIN - System Administrator</option>
+                            <option value="DEUSER">DEUSER - Data Entry / Intake Officer</option>
+                            <option value="UWUSER">UWUSER - Underwriting Verification Officer</option>
+                            <option value="UWMGR">UWMGR - Underwriting Manager</option>
+                            <option value="POLICY_ADMIN">POLICY_ADMIN - Policy Administrator</option>
+                            <option value="CLMMGR">CLMMGR - Claims Manager</option>
+                            <option value="SERVICE">SERVICE - Policy Servicing Officer</option>
+                          </>
+                        )}
                       </select>
                     </div>
 

@@ -109,17 +109,7 @@ const emptyFormData: ProposalFormData = {
   },
   riders: [],
   discLoads: [],
-  beneficiaries: [
-    {
-      PBEN_NAME: '',
-      PBEN_RELATION: 'SPOUSE',
-      PBEN_DOB: '1997-05-15',
-      PBEN_SHARE_PCT: 100,
-      PBEN_ID_TYPE: 'NATIONAL_ID',
-      PBEN_ID_NO: '',
-      PBEN_CONTACT: ''
-    }
-  ],
+  beneficiaries: [],
   exclusions: [
     {
       PEX_CODE: 'EX_SUICIDE',
@@ -152,8 +142,17 @@ export const ProposalPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userGroup = (user?.userGroup || 'ADMIN').toUpperCase();
-  const isPolicyAdmin = userGroup === 'POLICY_ADMIN' || userGroup === 'ADMIN';
-  const isUnderwriter = userGroup === 'UWUSER' || userGroup === 'DEUSER' || userGroup === 'USER';
+  const isDEUser = userGroup === 'DEUSER' || userGroup === 'ADMIN';
+  const isUWUser = userGroup === 'UWUSER' || userGroup === 'UWMGR' || userGroup === 'ADMIN';
+  const isUWMgr = userGroup === 'UWMGR' || userGroup === 'POLICY_ADMIN' || userGroup === 'ADMIN';
+
+  // Role permissions per workflow rules:
+  // DEUSER: Proposal data entry & submit for verification
+  // UWUSER: Underwriting assessment & proposal approval
+  // UWMGR: First premium collection, policy conversion & policy approval
+  const canSubmit = isDEUser || userGroup === 'UWUSER';
+  const canApproveProposal = isUWUser;
+  const canConvertPolicy = isUWMgr;
 
   // Page mode: 'list' | 'stepper'
   const [pageMode, setPageMode] = useState<'list' | 'stepper'>('list');
@@ -513,20 +512,26 @@ export const ProposalPage: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // Clean payload: filter out incomplete beneficiaries and empty riders
+      const cleanedPayload: ProposalFormData = {
+        ...formData,
+        beneficiaries: (formData.beneficiaries || []).filter(b => b.PBEN_NAME && b.PBEN_NAME.trim().length > 0),
+        riders: (formData.riders || []).filter(r => r.PRD_RIDER_CODE && r.PRD_RIDER_CODE.trim().length > 0)
+      };
+
       if (!editingPropNo) {
-        const res = await proposalService.createProposal(formData);
+        const res = await proposalService.createProposal(cleanedPayload);
         setFeedback({
           type: 'success',
-          message: `Proposal '${res.proposal.info.PROP_NO}' created successfully!`
+          message: `Draft Proposal '${res.proposal.info.PROP_NO}' saved successfully!`
         });
         setEditingPropNo(res.proposal.info.PROP_NO);
         setProposalDetail(res.proposal);
-        setCurrentStep(8);
       } else {
-        const res = await proposalService.updateProposal(editingPropNo, formData);
+        const res = await proposalService.updateProposal(editingPropNo, cleanedPayload);
         setFeedback({
           type: 'success',
-          message: `Proposal '${editingPropNo}' updated successfully!`
+          message: `Proposal '${editingPropNo}' saved successfully!`
         });
         setProposalDetail(res.proposal);
       }
@@ -1710,8 +1715,26 @@ export const ProposalPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  {formData.beneficiaries.map((b, idx) => (
+                {formData.beneficiaries.length === 0 ? (
+                  <div className="p-8 text-center bg-gray-50 border border-dashed border-gray-300 rounded-xl space-y-3">
+                    <Users className="w-8 h-8 text-gray-400 mx-auto" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">No beneficiaries added yet</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        You can designate policy beneficiaries now or continue and add them before submitting for underwriting.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddBeneficiary}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                    >
+                      + Add Beneficiary
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {formData.beneficiaries.map((b, idx) => (
                     <div key={idx} className="p-4 bg-gray-50/75 rounded-xl border border-gray-200 space-y-3">
                       <div className="flex items-center justify-between border-b border-gray-200/60 pb-2">
                         <span className="text-xs font-bold uppercase tracking-wider text-gray-700">
@@ -1798,8 +1821,9 @@ export const ProposalPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
             {/* ------------------------------------------------------------- */}
             {/* STEP 6: Policy Exclusions */}
@@ -2030,8 +2054,10 @@ export const ProposalPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">Current Operator:</span>
                       <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${
-                        isPolicyAdmin
+                        canConvertPolicy
                           ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : canApproveProposal
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : 'bg-blue-50 text-blue-700 border-blue-200'
                       }`}>
                         {user?.userName || user?.userId || 'Unknown'} [{userGroup}]
@@ -2040,23 +2066,53 @@ export const ProposalPage: React.FC = () => {
                   </div>
 
                   {/* Role Guidance Notice */}
-                  {!isPolicyAdmin ? (
-                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2.5 text-xs text-blue-800">
-                      <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  {userGroup === 'ADMIN' ? (
+                    <div className="p-3 bg-purple-50 border border-purple-100 rounded-lg flex items-start gap-2.5 text-xs text-purple-800">
+                      <ShieldCheck className="w-4 h-4 text-purple-600 mt-0.5 shrink-0" />
                       <div>
-                        <span className="font-semibold">Underwriting Officer / Maker Category ({userGroup}):</span>
-                        <p className="mt-0.5 text-blue-700">
-                          You have authority to record life assured details, attach riders, and <strong>Submit for Verification</strong>. Policy authorization and conversion to active policy contracts are restricted to the <strong>POLICY_ADMIN</strong> user category.
+                        <span className="font-semibold">System Administrator Superuser (ADMIN):</span>
+                        <p className="mt-0.5 text-purple-700">
+                          You have full unrestricted administrative authority across all database workflow levels: <strong>Submit for Verification</strong>, <strong>Approve Proposal</strong>, and <strong>Convert to Policy</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  ) : userGroup === 'POLICY_ADMIN' ? (
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-semibold">Policy Administration Authority (POLICY_ADMIN):</span>
+                        <p className="mt-0.5 text-emerald-700">
+                          You have supervisory privileges to review proposals, <strong>Approve & Authorize</strong>, and execute <strong>Convert to Policy</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  ) : userGroup === 'UWMGR' ? (
+                    <div className="p-3 bg-teal-50 border border-teal-100 rounded-lg flex items-start gap-2.5 text-xs text-teal-800">
+                      <ShieldCheck className="w-4 h-4 text-teal-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-semibold">Underwriting Manager Authority (UWMGR):</span>
+                        <p className="mt-0.5 text-teal-700">
+                          You have authority to collect First Premium (FPR), <strong>Convert Approved Proposal to Policy</strong>, and authorize policy contracts to place them IN FORCE.
+                        </p>
+                      </div>
+                    </div>
+                  ) : userGroup === 'UWUSER' ? (
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-semibold">Underwriting Officer Authority (UWUSER):</span>
+                        <p className="mt-0.5 text-emerald-700">
+                          You have authority to review medical/financial risk clearances, <strong>Approve Proposal</strong> for First Premium collection, request <strong>Rework</strong>, or <strong>Decline Risk</strong>.
                         </p>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2.5 text-xs text-blue-800">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                       <div>
-                        <span className="font-semibold">Policy Administration Authority ({userGroup}):</span>
-                        <p className="mt-0.5 text-emerald-700">
-                          You have full authorization privileges to review underwriting assessments, <strong>Approve & Authorize</strong> proposals, and <strong>Convert to Policy</strong>.
+                        <span className="font-semibold">Data Entry Officer Authority ({userGroup}):</span>
+                        <p className="mt-0.5 text-blue-700">
+                          You have authority to record proposal data, calculate tariff premiums, and <strong>Submit for Verification</strong>. Proposal underwriting approval is handled by <strong>UWUSER</strong>.
                         </p>
                       </div>
                     </div>
@@ -2076,39 +2132,36 @@ export const ProposalPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 pt-2">
-                    {/* Action 1: Submit - available to Underwriting User and Admin */}
-                    {(!proposalDetail || proposalDetail.info.PROP_STATUS === 'DRAFT' || proposalDetail.info.PROP_STATUS === 'REWORK' || !isPolicyAdmin) && (
+                    {/* Action 1: Submit - available to DEUSER and UWUSER */}
+                    {(!proposalDetail || proposalDetail.info.PROP_STATUS === 'DRAFT' || proposalDetail.info.PROP_STATUS === 'REWORK') && canSubmit && (
                       <button
                         type="button"
-                        disabled={proposalDetail?.info.PROP_STATUS === 'APPROVED' || proposalDetail?.info.PROP_STATUS === 'CONVERTED'}
                         onClick={() => handleWorkflowAction('SUBMIT')}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
                       >
                         <Send className="w-4 h-4" />
                         <span>Submit for Verification</span>
                       </button>
                     )}
 
-                    {/* Policy Admin Action Buttons: Only visible / active for POLICY_ADMIN / ADMIN */}
-                    {isPolicyAdmin && (
+                    {/* Approver Action Buttons: Visible / active for UWUSER, UWMGR, POLICY_ADMIN, and ADMIN */}
+                    {canApproveProposal && (proposalDetail?.info.PROP_STATUS === 'SUBMITTED' || proposalDetail?.info.PROP_STATUS === 'UNDERWRITING') && (
                       <>
                         {/* Action 2: Approve */}
                         <button
                           type="button"
-                          disabled={proposalDetail?.info.PROP_STATUS !== 'SUBMITTED' && proposalDetail?.info.PROP_STATUS !== 'UNDERWRITING'}
                           onClick={() => handleWorkflowAction('APPROVE')}
-                          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
                         >
                           <CheckCircle className="w-4 h-4" />
-                          <span>Approve & Authorize</span>
+                          <span>Approve Proposal</span>
                         </button>
 
                         {/* Action 3: Send Back / Rework */}
                         <button
                           type="button"
-                          disabled={proposalDetail?.info.PROP_STATUS !== 'SUBMITTED' && proposalDetail?.info.PROP_STATUS !== 'UNDERWRITING'}
                           onClick={() => handleWorkflowAction('REWORK')}
-                          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
                         >
                           <RefreshCw className="w-4 h-4" />
                           <span>Send Back for Rework</span>
@@ -2117,9 +2170,8 @@ export const ProposalPage: React.FC = () => {
                         {/* Action 4: Reject */}
                         <button
                           type="button"
-                          disabled={proposalDetail?.info.PROP_STATUS !== 'SUBMITTED' && proposalDetail?.info.PROP_STATUS !== 'UNDERWRITING'}
                           onClick={() => handleWorkflowAction('REJECT')}
-                          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
+                          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-xs transition-colors shadow-xs"
                         >
                           <XCircle className="w-4 h-4" />
                           <span>Decline / Reject Risk</span>
@@ -2157,7 +2209,7 @@ export const ProposalPage: React.FC = () => {
                           <span>First Premium Receipt (FPR) Required Before Policy Conversion</span>
                         </div>
                         <p className="text-xs text-amber-800">
-                          Regulatory underwriting policy requires that the First Premium Receipt (FPR) must be collected from the policyholder and verified in General Ledger before a Policy Contract can be officially incepted and approved.
+                          Regulatory underwriting policy requires that the First Premium Receipt (FPR) must be collected from the policyholder and verified before a Policy Contract can be officially incepted and approved.
                         </p>
                         <div className="pt-1">
                           <button
@@ -2177,14 +2229,14 @@ export const ProposalPage: React.FC = () => {
                             <CheckCircle className="w-3.5 h-3.5" />
                             <span>First Premium Collected ({proposalDetail?.info.FPR_RECEIPT_NO || 'PAID'})</span>
                           </div>
-                          {isPolicyAdmin ? (
+                          {canConvertPolicy ? (
                             <span>Executing conversion will generate a formal Policy Number and copy all life assured, riders, beneficiaries, and premium summaries into the Policy register.</span>
                           ) : (
-                            <span className="text-amber-700 font-medium">Please login as Policy Admin (`policy_admin`) to execute policy conversion.</span>
+                            <span className="text-amber-700 font-medium">Please login as Underwriting Manager (`uwmgr`) or Policy Admin (`policy_admin`) to execute policy conversion.</span>
                           )}
                         </div>
 
-                        {isPolicyAdmin && (
+                        {canConvertPolicy && (
                           <button
                             type="button"
                             disabled={isConverting}
@@ -2313,14 +2365,72 @@ export const ProposalPage: React.FC = () => {
                   <span>Next Step</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
-              ) : (
+              ) : proposalDetail?.info.PROP_STATUS === 'CONVERTED' ? (
                 <button
                   type="button"
-                  onClick={handleSaveProposal}
+                  onClick={() => navigate('/policy-administration')}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  <span>View in Policy Administration</span>
+                </button>
+              ) : proposalDetail?.info.PROP_STATUS === 'APPROVED' && canConvertPolicy ? (
+                proposalDetail?.info.FPR_STATUS === 'COLLECTED' ? (
+                  <button
+                    type="button"
+                    disabled={isConverting}
+                    onClick={handleConvertToPolicy}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
+                  >
+                    {isConverting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Converting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileSpreadsheet className="w-4 h-4" />
+                        <span>Convert to Policy Contract</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/premium-collection')}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
+                  >
+                    <Receipt className="w-4 h-4" />
+                    <span>Collect First Premium (FPR)</span>
+                  </button>
+                )
+              ) : canApproveProposal && (proposalDetail?.info.PROP_STATUS === 'UNDERWRITING' || proposalDetail?.info.PROP_STATUS === 'SUBMITTED') ? (
+                <button
+                  type="button"
+                  onClick={() => handleWorkflowAction('APPROVE')}
                   className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>Finalize Proposal</span>
+                  <span>Approve Proposal</span>
+                </button>
+              ) : canSubmit && (!proposalDetail || proposalDetail.info.PROP_STATUS === 'DRAFT' || proposalDetail.info.PROP_STATUS === 'REWORK') ? (
+                <button
+                  type="button"
+                  onClick={() => handleWorkflowAction('SUBMIT')}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Submit for Verification</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={handleSaveProposal}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Save Changes</span>
                 </button>
               )}
             </div>

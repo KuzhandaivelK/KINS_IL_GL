@@ -28,7 +28,8 @@ import {
   CircleDot,
   Calculator,
   GitBranch,
-  FileText
+  FileText,
+  Inbox
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -60,12 +61,14 @@ const iconDictionary: Record<string, React.ComponentType<{ className?: string }>
   CircleDot,
   Calculator,
   GitBranch,
-  FileText
+  FileText,
+  Inbox
 };
 
 // Default fallback items in case API is loading or network is offline
 const defaultFallbackMenus: MenuListItem[] = [
   { MENU_ID: 'DASHBOARD', MENU_NAME: 'Dashboard', MENU_PARENT_ID: null, MENU_SEQ_NO: 1, MENU_PATH: '/dashboard', MENU_ICON: 'LayoutDashboard', IS_ACTIVE: 'Y' },
+  { MENU_ID: 'WORKBASKET', MENU_NAME: 'My Workbasket', MENU_PARENT_ID: null, MENU_SEQ_NO: 2, MENU_PATH: '/workbasket', MENU_ICON: 'Inbox', IS_ACTIVE: 'Y' },
   {
     MENU_ID: 'INDIVIDUAL_LIFE',
     MENU_NAME: 'Individual Life',

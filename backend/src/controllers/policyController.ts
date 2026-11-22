@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { policyRepository } from '../repositories/policyRepository';
+import { workflowAuthService } from '../services/workflowAuthService';
 
 const approvePolicySchema = z.object({
   decision: z.enum(['APPROVE', 'REJECT', 'REWORK']),
@@ -64,7 +65,7 @@ export const policyController = {
 
   /**
    * POST /api/policies/convert-proposal/:propNo
-   * Convert an approved proposal to policy
+   * Convert an approved proposal to policy (database-driven workflow authorization)
    */
   async convertProposal(req: Request, res: Response): Promise<void> {
     try {
@@ -72,11 +73,19 @@ export const policyController = {
       const username = req.user?.userId || 'admin';
       const userGroup = req.user?.userGroup || 'ADMIN';
 
-      // Check user role: policy_admin or admin
-      if (userGroup !== 'POLICY_ADMIN' && userGroup !== 'ADMIN') {
+      // Check database workflow permission for Policy Conversion (WF_POLICY_CONV)
+      const auth = await workflowAuthService.checkPermission({
+        userId: username,
+        userGroup,
+        wfCode: 'WF_POLICY_CONV',
+        levelNo: 1,
+        action: 'APPROVE'
+      });
+
+      if (!auth.allowed) {
         res.status(403).json({
           success: false,
-          message: 'Access denied: Only Policy Administration officers can convert proposals to policy contracts.'
+          message: auth.reason || 'Access denied: You are not authorized by workflow rules to convert proposals to policy contracts.'
         });
         return;
       }
@@ -100,7 +109,7 @@ export const policyController = {
 
   /**
    * POST /api/policies/:id/approve
-   * Policy approval & authorization by policy_admin
+   * Policy approval & authorization (database-driven workflow authorization)
    */
   async approvePolicy(req: Request, res: Response): Promise<void> {
     try {
@@ -109,11 +118,19 @@ export const policyController = {
       const username = req.user?.userId || 'admin';
       const userGroup = req.user?.userGroup || 'ADMIN';
 
-      // Check role
-      if (userGroup !== 'POLICY_ADMIN' && userGroup !== 'ADMIN') {
+      // Check database workflow permission for Policy Approval (WF_POLICY_APPR)
+      const auth = await workflowAuthService.checkPermission({
+        userId: username,
+        userGroup,
+        wfCode: 'WF_POLICY_APPR',
+        levelNo: 1,
+        action: validated.decision
+      });
+
+      if (!auth.allowed) {
         res.status(403).json({
           success: false,
-          message: 'Access denied: Only Policy Administration officers can authorize incepted policies.'
+          message: auth.reason || 'Access denied: You are not authorized by workflow rules to approve/authorize incepted policies.'
         });
         return;
       }

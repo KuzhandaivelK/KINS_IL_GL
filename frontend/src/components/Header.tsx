@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/AuthContext';
-import { Menu, Search, Bell, User as UserIcon, LogOut, ChevronDown, ShieldCheck } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { Menu, Search, Bell, User as UserIcon, LogOut, ChevronDown, ShieldCheck, Inbox, ArrowRight } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { workflowService } from '../services/workflowService';
+import { WorkbasketSummary } from '../types/workflow';
 
 interface HeaderProps {
   onToggleMobileMenu: () => void;
@@ -11,9 +13,29 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, onLogout }) => {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [workbasket, setWorkbasket] = useState<WorkbasketSummary | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Fetch live workbasket pending items
+  useEffect(() => {
+    let isMounted = true;
+    const fetchWorkbasket = async () => {
+      try {
+        const data = await workflowService.getWorkbasket();
+        if (isMounted) setWorkbasket(data);
+      } catch (err) {
+        // Silently handle if unauthenticated
+      }
+    };
+    if (user) {
+      fetchWorkbasket();
+      const interval = setInterval(fetchWorkbasket, 30000); // Poll every 30s
+      return () => { isMounted = false; clearInterval(interval); };
+    }
+  }, [user]);
 
   // Close menus on outside click
   useEffect(() => {
@@ -69,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, onLogout }) 
 
       {/* Right: Actions, Notifications, and User Menu */}
       <div className="flex items-center gap-3" ref={menuRef}>
-        {/* Notifications Icon with Demo Badge */}
+        {/* Workbasket Notifications with Live Pending Badge */}
         <div className="relative">
           <button
             type="button"
@@ -78,33 +100,76 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, onLogout }) 
               setUserMenuOpen(false);
             }}
             className="p-2 text-slate-500 hover:text-navy hover:bg-slate-100 rounded-lg relative transition-colors focus:outline-none"
-            title="Notifications"
+            title="Pending Workbasket Approvals"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-teal-accent rounded-full ring-2 ring-white animate-pulse" />
+            {workbasket && workbasket.totalPending > 0 ? (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center shadow-xs">
+                {workbasket.totalPending > 99 ? '99+' : workbasket.totalPending}
+              </span>
+            ) : (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white" />
+            )}
           </button>
 
           {notificationOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200 py-3 z-50 animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-2 w-84 bg-white rounded-xl shadow-xl border border-slate-200 py-3 z-50 animate-in fade-in zoom-in-95">
               <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-navy uppercase tracking-wider">System Alerts</span>
-                <span className="text-[10px] font-semibold bg-teal-light text-teal-accent px-2 py-0.5 rounded-full">
-                  3 New
+                <div className="flex items-center gap-1.5">
+                  <Inbox className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-navy uppercase tracking-wider">Pending Workbasket</span>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  (workbasket?.totalPending ?? 0) > 0 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700'
+                }`}>
+                  {workbasket?.totalPending ?? 0} Pending
                 </span>
               </div>
-              <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs">
-                <div className="p-3 hover:bg-slate-50 transition-colors">
-                  <p className="font-semibold text-text-main">Underwriting Queue Alert</p>
-                  <p className="text-slate-500 text-[11px] mt-0.5">12 new individual applications awaiting medical sign-off.</p>
-                </div>
-                <div className="p-3 hover:bg-slate-50 transition-colors">
-                  <p className="font-semibold text-text-main">Group Scheme Renewal</p>
-                  <p className="text-slate-500 text-[11px] mt-0.5">Corporate roster DEMO-1002 updated for processing.</p>
-                </div>
-                <div className="p-3 hover:bg-slate-50 transition-colors">
-                  <p className="font-semibold text-text-main">Oracle 19c Synchronization</p>
-                  <p className="text-slate-500 text-[11px] mt-0.5">Database connection pool active on localhost:1521/orcl.</p>
-                </div>
+
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-xs">
+                {!workbasket?.items || workbasket.items.length === 0 ? (
+                  <div className="p-4 text-center text-slate-400">
+                    <p className="text-xs font-medium">All caught up!</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">No pending approvals for {user?.userGroup || 'your group'}.</p>
+                  </div>
+                ) : (
+                  workbasket.items.slice(0, 5).map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setNotificationOpen(false);
+                        navigate(item.navigationUrl);
+                      }}
+                      className="p-3 hover:bg-blue-50/50 cursor-pointer transition-colors space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-xs text-navy">{item.refNo}</span>
+                        <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          {item.type}
+                        </span>
+                      </div>
+                      <p className="font-medium text-slate-700 truncate">{item.customerName}</p>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                        <span className="text-amber-700 font-medium truncate max-w-[180px]">{item.requiredAction}</span>
+                        <span className="font-semibold text-slate-800">${item.amount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="px-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationOpen(false);
+                    navigate('/workbasket');
+                  }}
+                  className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>Go to Full Workbasket</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           )}

@@ -7,19 +7,19 @@ const assuredInputSchema = z.object({
   PAS_DOB: z.string().min(1, 'Date of Birth is required'),
   PAS_AGE: z.number().int().min(0).max(120),
   PAS_GENDER: z.enum(['M', 'F', 'O']),
-  PAS_OCCUPATION: z.string().max(100).optional(),
+  PAS_OCCUPATION: z.string().max(100).optional().nullable(),
   PAS_ANN_INCOME: z.number().min(0).optional().default(0),
   PAS_ID_TYPE: z.string().max(30).optional().default('NATIONAL_ID'),
-  PAS_ID_NO: z.string().max(50).optional(),
-  PAS_MOBILE: z.string().max(25).optional(),
-  PAS_EMAIL: z.string().email().optional().or(z.literal('')),
-  PAS_ADDRESS: z.string().max(300).optional(),
+  PAS_ID_NO: z.string().max(50).optional().nullable(),
+  PAS_MOBILE: z.string().max(25).optional().nullable(),
+  PAS_EMAIL: z.string().email().optional().nullable().or(z.literal('')),
+  PAS_ADDRESS: z.string().max(300).optional().nullable(),
   PAS_SMOKER_YN: z.enum(['Y', 'N']).optional().default('N'),
   PAS_HIV_YN: z.enum(['Y', 'N']).optional().default('N'),
   PAS_HEIGHT_CM: z.number().nullable().optional(),
   PAS_WEIGHT_KG: z.number().nullable().optional(),
   PAS_BMI: z.number().nullable().optional(),
-  PAS_MEDICAL_HISTORY: z.string().max(1000).optional()
+  PAS_MEDICAL_HISTORY: z.string().max(1000).optional().nullable()
 });
 
 const riderInputSchema = z.object({
@@ -36,19 +36,19 @@ const discLoadInputSchema = z.object({
   PDL_CALC_TYPE: z.enum(['PERCENTAGE', 'FLAT', 'PER_MILLE']).optional().default('PERCENTAGE'),
   PDL_RATE_VALUE: z.number().optional().default(0),
   PDL_AMOUNT: z.number().min(0),
-  PDL_REMARKS: z.string().max(300).optional()
+  PDL_REMARKS: z.string().max(300).optional().nullable()
 });
 
 const beneficiaryInputSchema = z.object({
-  PBEN_NAME: z.string().min(1, 'Beneficiary name is required').max(150),
-  PBEN_RELATION: z.string().min(1).max(50),
-  PBEN_DOB: z.string().optional(),
-  PBEN_SHARE_PCT: z.number().min(0.01).max(100),
-  PBEN_ID_TYPE: z.string().max(30).optional(),
-  PBEN_ID_NO: z.string().max(50).optional(),
-  PBEN_CONTACT: z.string().max(50).optional(),
-  PBEN_GUARDIAN_NAME: z.string().max(150).optional(),
-  PBEN_GUARDIAN_RELATION: z.string().max(50).optional()
+  PBEN_NAME: z.string().max(150).optional().default(''),
+  PBEN_RELATION: z.string().max(50).optional().default('SPOUSE'),
+  PBEN_DOB: z.string().optional().nullable(),
+  PBEN_SHARE_PCT: z.number().min(0).max(100).optional().default(100),
+  PBEN_ID_TYPE: z.string().max(30).optional().nullable(),
+  PBEN_ID_NO: z.string().max(50).optional().nullable(),
+  PBEN_CONTACT: z.string().max(50).optional().nullable(),
+  PBEN_GUARDIAN_NAME: z.string().max(150).optional().nullable(),
+  PBEN_GUARDIAN_RELATION: z.string().max(50).optional().nullable()
 });
 
 const exclusionInputSchema = z.object({
@@ -207,9 +207,10 @@ export const proposalController = {
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
+        const detailMsg = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
         res.status(400).json({
           success: false,
-          message: 'Validation error',
+          message: detailMsg ? `Validation error: ${detailMsg}` : 'Validation error',
           errors: error.issues
         });
         return;
@@ -242,9 +243,10 @@ export const proposalController = {
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
+        const detailMsg = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
         res.status(400).json({
           success: false,
-          message: 'Validation error',
+          message: detailMsg ? `Validation error: ${detailMsg}` : 'Validation error',
           errors: error.issues
         });
         return;
@@ -323,7 +325,7 @@ export const proposalController = {
 
   /**
    * POST /api/proposals/:id/workflow
-   * Process Maker / Checker / Underwriter workflow decision
+   * Process Maker / Checker / Underwriter workflow decision with database-driven authorization
    */
   async processWorkflow(req: Request, res: Response): Promise<void> {
     try {
@@ -332,21 +334,13 @@ export const proposalController = {
       const username = (req as any).user?.userId || (req as any).user?.USR_ID || 'admin';
       const userGroup = ((req as any).user?.userGroup || 'ADMIN').toUpperCase();
 
-      // Enforce role separation: UWUSER / DEUSER can only submit for verification
-      if ((userGroup === 'UWUSER' || userGroup === 'DEUSER') && validated.action === 'APPROVE') {
-        res.status(403).json({
-          success: false,
-          message: 'Access denied: Underwriting users can only submit proposals for verification. Approval & authorization requires POLICY_ADMIN category.'
-        });
-        return;
-      }
-
       const updated = await proposalRepository.processWorkflowAction(
         propNo,
         validated.action,
         validated.comments,
         username,
-        validated.userRole
+        validated.userRole,
+        userGroup
       );
 
       res.json({

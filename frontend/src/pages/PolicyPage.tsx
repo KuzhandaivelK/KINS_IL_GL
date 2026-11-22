@@ -46,7 +46,7 @@ export const PolicyPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userGroup = (user?.userGroup || 'ADMIN').toUpperCase();
-  const isPolicyAdmin = userGroup === 'POLICY_ADMIN' || userGroup === 'ADMIN';
+  const isPolicyAdmin = userGroup === 'UWMGR' || userGroup === 'POLICY_ADMIN' || userGroup === 'ADMIN';
 
   // Modes: 'list' | 'detail' | 'schedule'
   const [viewMode, setViewMode] = useState<'list' | 'detail' | 'schedule'>('list');
@@ -795,17 +795,17 @@ export const PolicyPage: React.FC = () => {
                   <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 space-y-1">
                     <p className="font-bold flex items-center gap-1.5">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      Policy Administration Clearance Required
+                      Policy Administration / Underwriting Manager Clearance Required
                     </p>
                     <p>
-                      As Policy Administrator, you have authority to approve this converted policy contract. Confirm that life assured records, sum assured, attached riders, and installment premium calculations meet statutory criteria. Authorizing will place the contract <strong>IN FORCE</strong>.
+                      As Underwriting Manager or Policy Administrator, you have authority to approve this converted policy contract. Confirm that life assured records, sum assured, attached riders, and installment premium calculations meet statutory criteria. Authorizing will place the contract <strong>IN FORCE</strong>.
                     </p>
                   </div>
                 ) : (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                    <p className="font-bold">Pending Policy Administration Approval</p>
+                    <p className="font-bold">Pending Underwriting Manager / Policy Admin Approval</p>
                     <p className="mt-1">
-                      You are logged in with role <strong>{userGroup}</strong>. Only users with the <strong>POLICY_ADMIN</strong> role can authorize incepted policies and place them IN FORCE.
+                      You are logged in with role <strong>{userGroup}</strong>. Only users with the <strong>UWMGR</strong> or <strong>POLICY_ADMIN</strong> role can authorize incepted policies and place them IN FORCE.
                     </p>
                   </div>
                 )}

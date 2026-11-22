@@ -1,11 +1,14 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { workflowRepository } from '../repositories/workflowRepository';
+import { workflowAuthService } from '../services/workflowAuthService';
 
 const workflowLevelSchema = z.object({
   WFL_LEVEL_NO: z.number().int().min(1).max(99),
   WFL_LEVEL_NAME: z.string().min(1, 'Level name is required').max(100),
   WFL_ROLE_CODE: z.string().min(1, 'Role code is required').max(50),
+  WFL_USER_GROUP: z.string().max(50).nullable().optional(),
+  AUTHORIZED_USER_GROUPS: z.array(z.string()).optional(),
   WFL_MIN_AMOUNT: z.number().nullable().optional().default(0),
   WFL_MAX_AMOUNT: z.number().nullable().optional(),
   WFL_SLA_HOURS: z.number().int().min(1).max(9999).optional().default(24),
@@ -91,15 +94,94 @@ export const workflowController = {
    */
   async getLookups(req: Request, res: Response): Promise<void> {
     try {
+      const userGroups = await workflowAuthService.getUserGroupsWithCounts();
       res.json({
         success: true,
         categories: WORKFLOW_CATEGORIES,
-        roles: WORKFLOW_ROLES
+        roles: WORKFLOW_ROLES,
+        userGroups
       });
     } catch (error: any) {
       res.status(500).json({
         success: false,
         message: 'Failed to load lookups',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/workflows/meta/user-groups
+   */
+  async getUserGroups(_req: Request, res: Response): Promise<void> {
+    try {
+      const userGroups = await workflowAuthService.getUserGroupsWithCounts();
+      res.json({
+        success: true,
+        count: userGroups.length,
+        userGroups
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to load user groups',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * POST /api/workflows/check-permission
+   * Verify if current user is authorized to perform action at given workflow level
+   */
+  async checkPermission(req: Request, res: Response): Promise<void> {
+    try {
+      const { wfCode, levelNo, action, amount } = req.body;
+      const userId = (req as any).user?.userId || (req as any).user?.USR_ID || 'admin';
+      const userGroup = (req as any).user?.userGroup;
+
+      const result = await workflowAuthService.checkPermission({
+        userId,
+        userGroup,
+        wfCode: String(wfCode || 'WF_UNDERWRITING'),
+        levelNo: Number(levelNo || 1),
+        action: action || 'APPROVE',
+        amount: amount !== undefined && amount !== null ? Number(amount) : undefined
+      });
+
+      res.json({
+        success: true,
+        permission: result
+      });
+    } catch (error: any) {
+      console.error('Error in checkPermission:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to evaluate workflow permission',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/workflows/workbasket
+   * Retrieve pending approvals and tasks for the authenticated user and group
+   */
+  async getWorkbasket(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).user?.userId || (req as any).user?.USR_ID || 'admin';
+      const userGroup = (req as any).user?.userGroup;
+
+      const summary = await workflowAuthService.getWorkbasket(userId, userGroup);
+      res.json({
+        success: true,
+        ...summary
+      });
+    } catch (error: any) {
+      console.error('Error in getWorkbasket:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve workbasket',
         error: error.message
       });
     }

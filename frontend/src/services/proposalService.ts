@@ -123,7 +123,10 @@ export const proposalService = {
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.message || 'Failed to create proposal');
+      const errorMsg = data.errors && Array.isArray(data.errors)
+        ? data.errors.map((e: any) => `${e.path?.join('.') || 'field'}: ${e.message}`).join(', ')
+        : data.message || 'Failed to create proposal';
+      throw new Error(errorMsg);
     }
     return data;
   },
@@ -141,7 +144,10 @@ export const proposalService = {
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.message || 'Failed to update proposal');
+      const errorMsg = data.errors && Array.isArray(data.errors)
+        ? data.errors.map((e: any) => `${e.path?.join('.') || 'field'}: ${e.message}`).join(', ')
+        : data.message || 'Failed to update proposal';
+      throw new Error(errorMsg);
     }
     return data;
   },
