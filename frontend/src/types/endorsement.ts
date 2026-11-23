@@ -63,3 +63,20 @@ export interface CreateEndorsementPayload {
     premium?: number;
   };
 }
+
+export interface EndorsementCalculationResult {
+  category: string;
+  oldSumAssured: number;
+  newSumAssured: number;
+  oldBasicPrem: number;
+  newBasicPrem: number;
+  oldNetAnnual: number;
+  newNetAnnual: number;
+  oldModalFactor: number;
+  newModalFactor: number;
+  oldInstallment: number;
+  newInstallment: number;
+  premiumImpact: number;
+  newTaxAmount: number;
+  newTotalPayable: number;
+}

@@ -36,7 +36,12 @@ import {
 import { policyService } from '../services/policyService';
 import { endorsementService } from '../services/endorsementService';
 import { PolicyInfoRecord, PolicyDetail, PolicyStatus } from '../types/policy';
-import { PolicyEndorsementRecord, EndorsementType, CreateEndorsementPayload } from '../types/endorsement';
+import {
+  PolicyEndorsementRecord,
+  EndorsementType,
+  CreateEndorsementPayload,
+  EndorsementCalculationResult
+} from '../types/endorsement';
 
 const STATUS_BADGES: Record<PolicyStatus, { bg: string; text: string; border: string }> = {
   PENDING_APPROVAL: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
@@ -104,6 +109,38 @@ export const PolicyPage: React.FC = () => {
   >([]);
   const [sumAssuredField, setSumAssuredField] = useState<number>(100000);
   const [payFreqField, setPayFreqField] = useState<'ANNUAL' | 'SEMI_ANNUAL' | 'QUARTERLY' | 'MONTHLY'>('ANNUAL');
+  const [dbCalculation, setDbCalculation] = useState<EndorsementCalculationResult | null>(null);
+  const [isCalculatingDb, setIsCalculatingDb] = useState<boolean>(false);
+
+  // Live DB-side calculation effect for financial alterations
+  useEffect(() => {
+    if (!isEndorsementModalOpen || !selectedPolNo) return;
+    if (endorsementType !== 'SUM_ASSURED_CHANGE' && endorsementType !== 'FREQUENCY_CHANGE') {
+      setDbCalculation(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsCalculatingDb(true);
+      try {
+        const res = await endorsementService.calculateImpact(
+          selectedPolNo,
+          endorsementType,
+          endorsementType === 'SUM_ASSURED_CHANGE' ? sumAssuredField : null,
+          endorsementType === 'FREQUENCY_CHANGE' ? payFreqField : null
+        );
+        if (res.success && res.calculation) {
+          setDbCalculation(res.calculation);
+        }
+      } catch (err) {
+        console.error('DB endorsement calculation error', err);
+      } finally {
+        setIsCalculatingDb(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [isEndorsementModalOpen, selectedPolNo, endorsementType, sumAssuredField, payFreqField]);
 
   // Load Policies Register
   const loadPolicies = async () => {
@@ -1850,31 +1887,43 @@ export const PolicyPage: React.FC = () => {
                     />
                   </div>
 
-                  {/* Impact preview */}
-                  {(() => {
-                    const oldSa = Number(policyDetail.info.POL_SUM_ASSURED) || 1;
-                    const oldInstPrem = Number(policyDetail.premiumSummary?.PPS_INSTALLMENT_PREM || policyDetail.info.TOTAL_PAYABLE || 0);
-                    const ratio = sumAssuredField / oldSa;
-                    const estNewPrem = Math.round(oldInstPrem * ratio * 100) / 100;
-                    const impact = Math.round((estNewPrem - oldInstPrem) * 100) / 100;
-                    return (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1">
-                        <div className="flex justify-between font-semibold">
-                          <span className="text-amber-900">Estimated New Installment Premium:</span>
-                          <span className="font-mono text-gray-900">${estNewPrem.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-amber-800">Net Periodic Premium Impact:</span>
-                          <span className={`font-mono font-bold ${impact > 0 ? 'text-red-600' : impact < 0 ? 'text-emerald-600' : 'text-gray-600'}`}>
-                            {impact > 0 ? `+${impact.toLocaleString()}` : impact.toLocaleString()}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-amber-700 italic pt-1">
-                          * Pro-rata actuarial rate recalculation is applied automatically to basic & rider schedule.
-                        </p>
+                  {/* Impact preview from Oracle DB Package */}
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1.5">
+                    <div className="flex items-center justify-between font-semibold">
+                      <span className="text-amber-900 flex items-center gap-1.5">
+                        {isCalculatingDb ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" /> : null}
+                        <span>Estimated New Installment Premium:</span>
+                      </span>
+                      <span className="font-mono text-gray-900 font-bold">
+                        ${dbCalculation ? dbCalculation.newInstallment.toLocaleString() : '...'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-amber-800">Net Periodic Premium Impact:</span>
+                      <span className={`font-mono font-bold ${
+                        (dbCalculation?.premiumImpact || 0) > 0
+                          ? 'text-red-600'
+                          : (dbCalculation?.premiumImpact || 0) < 0
+                          ? 'text-emerald-600'
+                          : 'text-gray-600'
+                      }`}>
+                        {dbCalculation
+                          ? (dbCalculation.premiumImpact > 0
+                              ? `+${dbCalculation.premiumImpact.toLocaleString()}`
+                              : `$${dbCalculation.premiumImpact.toLocaleString()}`)
+                          : '...'}
+                      </span>
+                    </div>
+                    {dbCalculation && (
+                      <div className="flex justify-between text-[11px] text-gray-600 pt-1 border-t border-amber-200/60">
+                        <span>Total Payable per Installment (incl. 18% Tax):</span>
+                        <span className="font-mono font-bold text-gray-900">${dbCalculation.newTotalPayable.toLocaleString()}</span>
                       </div>
-                    );
-                  })()}
+                    )}
+                    <p className="text-[10px] text-amber-700 italic pt-0.5">
+                      ⚡ Calculated dynamically by Oracle DB (PKG_POLICY_ENDORSEMENT)
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -1900,11 +1949,46 @@ export const PolicyPage: React.FC = () => {
                       <option value="ANNUAL">Annual (Factor 1.00)</option>
                       <option value="SEMI_ANNUAL">Semi-Annual (Factor 0.52)</option>
                       <option value="QUARTERLY">Quarterly (Factor 0.265)</option>
-                      <option value="MONTHLY">Monthly (Factor 0.09)</option>
+                      <option value="MONTHLY">Monthly (Factor 0.088)</option>
                     </select>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      Modal premium factor will recalculate installment amounts and update billing schedules automatically.
-                    </p>
+                    
+                    {/* Live impact preview for Frequency change from Oracle DB */}
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs space-y-1.5">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span className="text-blue-900 flex items-center gap-1.5">
+                          {isCalculatingDb ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-700" /> : null}
+                          <span>New Modal Installment:</span>
+                        </span>
+                        <span className="font-mono text-gray-900 font-bold">
+                          ${dbCalculation ? dbCalculation.newInstallment.toLocaleString() : '...'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-800">Installment Premium Impact:</span>
+                        <span className={`font-mono font-bold ${
+                          (dbCalculation?.premiumImpact || 0) > 0
+                            ? 'text-red-600'
+                            : (dbCalculation?.premiumImpact || 0) < 0
+                            ? 'text-emerald-600'
+                            : 'text-gray-600'
+                        }`}>
+                          {dbCalculation
+                            ? (dbCalculation.premiumImpact > 0
+                                ? `+${dbCalculation.premiumImpact.toLocaleString()}`
+                                : `$${dbCalculation.premiumImpact.toLocaleString()}`)
+                            : '...'}
+                        </span>
+                      </div>
+                      {dbCalculation && (
+                        <div className="flex justify-between text-[11px] text-gray-600 pt-1 border-t border-blue-200/60">
+                          <span>Total Payable (incl. Tax):</span>
+                          <span className="font-mono font-bold text-gray-900">${dbCalculation.newTotalPayable.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-blue-700 italic pt-0.5">
+                        ⚡ Modal factor ({dbCalculation?.newModalFactor || '...'}) and tax computed dynamically by Oracle DB (PKG_POLICY_ENDORSEMENT).
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

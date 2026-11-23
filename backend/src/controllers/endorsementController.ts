@@ -45,7 +45,53 @@ const createEndorsementSchema = z.object({
   }).optional()
 });
 
+const calculateEndorsementSchema = z.object({
+  polNo: z.string().min(1, 'Policy Number is required'),
+  endorsementType: z.enum([
+    'ADDRESS_CONTACT',
+    'BENEFICIARY_CHANGE',
+    'SUM_ASSURED_CHANGE',
+    'RIDER_ADD_REMOVE',
+    'FREQUENCY_CHANGE',
+    'GENERAL'
+  ]),
+  newSumAssured: z.number().optional().nullable(),
+  newPayFreq: z.enum(['ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY', 'MONTHLY']).optional().nullable()
+});
+
 export const endorsementController = {
+  /**
+   * POST /api/endorsements/calculate
+   * Preview calculation via Oracle DB Package PKG_POLICY_ENDORSEMENT
+   */
+  async calculateImpact(req: Request, res: Response): Promise<void> {
+    try {
+      const validated = calculateEndorsementSchema.parse(req.body);
+      const result = await endorsementRepository.calculateImpact(
+        validated.polNo,
+        validated.endorsementType,
+        validated.newSumAssured,
+        validated.newPayFreq
+      );
+      res.json({
+        success: true,
+        calculation: result
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        const detailMsg = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+        res.status(400).json({
+          success: false,
+          message: `Validation error: ${detailMsg}`
+        });
+        return;
+      }
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to calculate endorsement impact'
+      });
+    }
+  },
   /**
    * GET /api/policies/:polNo/endorsements
    */

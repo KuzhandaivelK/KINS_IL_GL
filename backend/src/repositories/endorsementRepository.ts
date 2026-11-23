@@ -10,6 +10,108 @@ import { PolicyDetail } from '../types/policy';
 
 export const endorsementRepository = {
   /**
+   * Calculate endorsement impact via Oracle PL/SQL package PKG_POLICY_ENDORSEMENT
+   */
+  async calculateImpact(
+    polNo: string,
+    endorsementType: string,
+    newSumAssured?: number | null,
+    newPayFreq?: string | null
+  ): Promise<{
+    category: string;
+    oldSumAssured: number;
+    newSumAssured: number;
+    oldBasicPrem: number;
+    newBasicPrem: number;
+    oldNetAnnual: number;
+    newNetAnnual: number;
+    oldModalFactor: number;
+    newModalFactor: number;
+    oldInstallment: number;
+    newInstallment: number;
+    premiumImpact: number;
+    newTaxAmount: number;
+    newTotalPayable: number;
+  }> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute(
+        `BEGIN
+           PKG_POLICY_ENDORSEMENT.CALCULATE_ENDORSEMENT(
+             p_pol_no              => :polNo,
+             p_endorsement_type    => :endorsementType,
+             p_new_sum_assured     => :newSumAssured,
+             p_new_pay_freq        => :newPayFreq,
+             p_category            => :category,
+             p_old_sum_assured     => :oldSumAssured,
+             p_new_sum_assured_out => :newSumAssuredOut,
+             p_old_basic_prem      => :oldBasicPrem,
+             p_new_basic_prem      => :newBasicPrem,
+             p_old_net_annual      => :oldNetAnnual,
+             p_new_net_annual      => :newNetAnnual,
+             p_old_modal_factor    => :oldModalFactor,
+             p_new_modal_factor    => :newModalFactor,
+             p_old_installment     => :oldInstallment,
+             p_new_installment     => :newInstallment,
+             p_premium_impact      => :premiumImpact,
+             p_new_tax_amount      => :newTaxAmount,
+             p_new_total_payable   => :newTotalPayable,
+             p_status              => :status,
+             p_err_msg             => :errMsg
+           );
+         END;`,
+        {
+          polNo: polNo.trim(),
+          endorsementType,
+          newSumAssured: newSumAssured ?? null,
+          newPayFreq: newPayFreq ?? null,
+          category: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 50 },
+          oldSumAssured: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newSumAssuredOut: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          oldBasicPrem: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newBasicPrem: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          oldNetAnnual: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newNetAnnual: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          oldModalFactor: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newModalFactor: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          oldInstallment: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newInstallment: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          premiumImpact: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newTaxAmount: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          newTotalPayable: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          status: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 50 },
+          errMsg: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 500 }
+        }
+      );
+
+      const out: any = res.outBinds;
+      if (out.status !== 'SUCCESS') {
+        throw new Error(out.errMsg || 'PL/SQL endorsement calculation failed.');
+      }
+
+      return {
+        category: out.category,
+        oldSumAssured: Number(out.oldSumAssured || 0),
+        newSumAssured: Number(out.newSumAssuredOut || 0),
+        oldBasicPrem: Number(out.oldBasicPrem || 0),
+        newBasicPrem: Number(out.newBasicPrem || 0),
+        oldNetAnnual: Number(out.oldNetAnnual || 0),
+        newNetAnnual: Number(out.newNetAnnual || 0),
+        oldModalFactor: Number(out.oldModalFactor || 1),
+        newModalFactor: Number(out.newModalFactor || 1),
+        oldInstallment: Number(out.oldInstallment || 0),
+        newInstallment: Number(out.newInstallment || 0),
+        premiumImpact: Number(out.premiumImpact || 0),
+        newTaxAmount: Number(out.newTaxAmount || 0),
+        newTotalPayable: Number(out.newTotalPayable || 0)
+      };
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
    * Retrieve all endorsements for a specific policy
    */
   async getByPolicyNo(polNo: string): Promise<PolicyEndorsementRecord[]> {
@@ -225,69 +327,52 @@ export const endorsementRepository = {
             throw new Error('New Sum Assured must be at least $1,000.');
           }
 
-          const oldSa = Number(existingPolicy.info.POL_SUM_ASSURED || 1);
-          const currentInstPrem = Number(existingPolicy.premiumSummary?.PPS_INSTALLMENT_PREM || existingPolicy.info.TOTAL_PAYABLE || 0);
-          const ratio = newSa / oldSa;
+          // Execute DB Stored Procedure: PKG_POLICY_ENDORSEMENT.APPLY_FINANCIAL_ENDORSEMENT
+          const applyRes = await connection.execute(
+            `BEGIN
+               PKG_POLICY_ENDORSEMENT.APPLY_FINANCIAL_ENDORSEMENT(
+                 p_pol_no           => :polNo,
+                 p_endorsement_type => :endType,
+                 p_new_sum_assured  => :newSa,
+                 p_new_pay_freq     => NULL,
+                 p_username         => :username,
+                 p_premium_impact   => :premiumImpact,
+                 p_new_installment  => :newInstallment,
+                 p_new_total        => :newTotal,
+                 p_status           => :status,
+                 p_err_msg          => :errMsg
+               );
+             END;`,
+            {
+              polNo,
+              endType: 'SUM_ASSURED_CHANGE',
+              newSa,
+              username: username.substring(0, 26),
+              premiumImpact: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+              newInstallment: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+              newTotal: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+              status: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 50 },
+              errMsg: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 500 }
+            }
+          );
 
-          const oldBasicPrem = Number(existingPolicy.premiumSummary?.PPS_BASIC_PREMIUM || 0);
-          const newBasicPrem = Math.round((oldBasicPrem * ratio) * 100) / 100;
-          const riderPrem = Number(existingPolicy.premiumSummary?.PPS_TOTAL_RIDER_PREMIUM || 0);
-          const loading = Number(existingPolicy.premiumSummary?.PPS_TOTAL_LOADING || 0);
-          const discount = Number(existingPolicy.premiumSummary?.PPS_TOTAL_DISCOUNT || 0);
-          const newNetAnnual = Math.max(0, Math.round((newBasicPrem + riderPrem + loading - discount) * 100) / 100);
-          const modalFactor = Number(existingPolicy.premiumSummary?.PPS_MODAL_FACTOR || 1.0);
-          const newInstallmentPrem = Math.round((newNetAnnual * modalFactor) * 100) / 100;
+          const out: any = applyRes.outBinds;
+          if (out.status !== 'SUCCESS') {
+            throw new Error(out.errMsg || 'DB procedure PKG_POLICY_ENDORSEMENT failed.');
+          }
 
-          premiumImpact = Math.round((newInstallmentPrem - currentInstPrem) * 100) / 100;
+          premiumImpact = Number(out.premiumImpact || 0);
 
           prevJson = JSON.stringify({
-            sumAssured: oldSa,
-            installmentPrem: currentInstPrem,
-            basicPrem: oldBasicPrem
+            sumAssured: existingPolicy.info.POL_SUM_ASSURED,
+            installmentPrem: existingPolicy.premiumSummary?.PPS_INSTALLMENT_PREM || existingPolicy.info.TOTAL_PAYABLE
           });
           newJson = JSON.stringify({
             sumAssured: newSa,
-            installmentPrem: newInstallmentPrem,
-            basicPrem: newBasicPrem,
-            premiumImpact
+            installmentPrem: out.newInstallment,
+            totalPayable: out.newTotal,
+            premiumImpact: out.premiumImpact
           });
-
-          // Update T_POLICY_INFO
-          await connection.execute(
-            `UPDATE T_POLICY_INFO
-             SET POL_SUM_ASSURED = :newSa,
-                 POL_INSTALLMENT_PREM = :newInstPrem,
-                 MODIFIED_BY = :username,
-                 MODIFIED_ON = SYSDATE
-             WHERE POL_NO = :polNo`,
-            {
-              newSa,
-              newInstPrem: newInstallmentPrem,
-              username: username.substring(0, 26),
-              polNo
-            }
-          );
-
-          // Update T_POLICY_PREMIUM_SUMMARY
-          await connection.execute(
-            `UPDATE T_POLICY_PREMIUM_SUMMARY
-             SET PPS_BASIC_SUM_ASSURED = :newSa,
-                 PPS_BASIC_PREMIUM = :newBasicPrem,
-                 PPS_NET_ANNUAL_PREM = :newNetAnnual,
-                 PPS_INSTALLMENT_PREM = :newInstPrem,
-                 PPS_TOTAL_PAYABLE = :newInstPrem,
-                 MODIFIED_BY = :username,
-                 MODIFIED_ON = SYSDATE
-             WHERE POL_NO = :polNo`,
-            {
-              newSa,
-              newBasicPrem,
-              newNetAnnual,
-              newInstPrem: newInstallmentPrem,
-              username: username.substring(0, 26),
-              polNo
-            }
-          );
           break;
         }
 
@@ -298,61 +383,52 @@ export const endorsementRepository = {
             throw new Error('New payment frequency must be specified.');
           }
 
-          const modalFactors: Record<string, number> = {
-            ANNUAL: 1.0,
-            SEMI_ANNUAL: 0.52,
-            QUARTERLY: 0.265,
-            MONTHLY: 0.088,
-            SINGLE: 1.0
-          };
-          const newFactor = modalFactors[newFreq] || 1.0;
-          const netAnnual = Number(existingPolicy.premiumSummary?.PPS_NET_ANNUAL_PREM || 0);
-          const newInstallment = Math.round((netAnnual * newFactor) * 100) / 100;
-          const currentInstPrem = Number(existingPolicy.premiumSummary?.PPS_INSTALLMENT_PREM || existingPolicy.info.TOTAL_PAYABLE || 0);
+          // Execute DB Stored Procedure: PKG_POLICY_ENDORSEMENT.APPLY_FINANCIAL_ENDORSEMENT
+          const applyRes = await connection.execute(
+            `BEGIN
+               PKG_POLICY_ENDORSEMENT.APPLY_FINANCIAL_ENDORSEMENT(
+                 p_pol_no           => :polNo,
+                 p_endorsement_type => :endType,
+                 p_new_sum_assured  => NULL,
+                 p_new_pay_freq     => :newFreq,
+                 p_username         => :username,
+                 p_premium_impact   => :premiumImpact,
+                 p_new_installment  => :newInstallment,
+                 p_new_total        => :newTotal,
+                 p_status           => :status,
+                 p_err_msg          => :errMsg
+               );
+             END;`,
+            {
+              polNo,
+              endType: 'FREQUENCY_CHANGE',
+              newFreq,
+              username: username.substring(0, 26),
+              premiumImpact: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+              newInstallment: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+              newTotal: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+              status: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 50 },
+              errMsg: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 500 }
+            }
+          );
 
-          premiumImpact = Math.round((newInstallment - currentInstPrem) * 100) / 100;
+          const out: any = applyRes.outBinds;
+          if (out.status !== 'SUCCESS') {
+            throw new Error(out.errMsg || 'DB procedure PKG_POLICY_ENDORSEMENT failed.');
+          }
+
+          premiumImpact = Number(out.premiumImpact || 0);
 
           prevJson = JSON.stringify({
             payFreq: existingPolicy.info.POL_PAY_FREQ,
-            installmentPrem: currentInstPrem
+            installmentPrem: existingPolicy.premiumSummary?.PPS_INSTALLMENT_PREM || existingPolicy.info.TOTAL_PAYABLE
           });
           newJson = JSON.stringify({
             payFreq: newFreq,
-            modalFactor: newFactor,
-            installmentPrem: newInstallment,
-            premiumImpact
+            installmentPrem: out.newInstallment,
+            totalPayable: out.newTotal,
+            premiumImpact: out.premiumImpact
           });
-
-          await connection.execute(
-            `UPDATE T_POLICY_INFO
-             SET POL_PAY_FREQ = :newFreq,
-                 POL_INSTALLMENT_PREM = :newInst,
-                 MODIFIED_BY = :username,
-                 MODIFIED_ON = SYSDATE
-             WHERE POL_NO = :polNo`,
-            {
-              newFreq,
-              newInst: newInstallment,
-              username: username.substring(0, 26),
-              polNo
-            }
-          );
-
-          await connection.execute(
-            `UPDATE T_POLICY_PREMIUM_SUMMARY
-             SET PPS_MODAL_FACTOR = :newFactor,
-                 PPS_INSTALLMENT_PREM = :newInst,
-                 PPS_TOTAL_PAYABLE = :newInst,
-                 MODIFIED_BY = :username,
-                 MODIFIED_ON = SYSDATE
-             WHERE POL_NO = :polNo`,
-            {
-              newFactor,
-              newInst: newInstallment,
-              username: username.substring(0, 26),
-              polNo
-            }
-          );
           break;
         }
 

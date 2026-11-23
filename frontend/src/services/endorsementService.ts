@@ -1,4 +1,4 @@
-import { PolicyEndorsementRecord, CreateEndorsementPayload } from '../types/endorsement';
+import { PolicyEndorsementRecord, CreateEndorsementPayload, EndorsementCalculationResult } from '../types/endorsement';
 import { PolicyDetail } from '../types/policy';
 
 const API_BASE_URL = '/api/endorsements';
@@ -12,6 +12,33 @@ function getAuthHeaders(): HeadersInit {
 }
 
 export const endorsementService = {
+  /**
+   * Preview endorsement calculation via Oracle PKG_POLICY_ENDORSEMENT
+   */
+  async calculateImpact(
+    polNo: string,
+    endorsementType: string,
+    newSumAssured?: number | null,
+    newPayFreq?: string | null
+  ): Promise<{ success: boolean; calculation: EndorsementCalculationResult }> {
+    const res = await fetch(`${API_BASE_URL}/calculate`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({
+        polNo,
+        endorsementType,
+        newSumAssured,
+        newPayFreq
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to calculate endorsement impact');
+    }
+    return data;
+  },
+
   /**
    * Fetch all endorsements across all policies
    */
