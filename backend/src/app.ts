@@ -16,6 +16,7 @@ import proposalRoutes from './routes/proposalRoutes';
 import policyRoutes from './routes/policyRoutes';
 import groupLifeRoutes from './routes/groupLifeRoutes';
 import policyServicingRoutes from './routes/policyServicingRoutes';
+import endorsementRoutes from './routes/endorsementRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -59,6 +60,7 @@ app.use('/api/proposals', proposalRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/group-life', groupLifeRoutes);
 app.use('/api/policy-servicing', policyServicingRoutes);
+app.use('/api/endorsements', endorsementRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

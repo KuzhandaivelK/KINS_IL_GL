@@ -800,6 +800,11 @@ export const proposalRepository = {
         throw new Error(`Proposal '${code}' not found.`);
       }
 
+      // Immutability Guard: Only DRAFT or REWORK proposals can be edited
+      if (existing.info.PROP_STATUS !== 'DRAFT' && existing.info.PROP_STATUS !== 'REWORK') {
+        throw new Error(`Proposal '${code}' is in status '${existing.info.PROP_STATUS}' and cannot be modified. Once approved, underwritten, or converted, proposal records are locked.`);
+      }
+
       const propUid = existing.info.PROP_UID;
 
       // 1. Recalculate Tariff
@@ -1113,6 +1118,15 @@ export const proposalRepository = {
     try {
       connection = await getConnection();
       const code = propNo.trim();
+
+      const existing = await this.findByProposalNo(code);
+      if (!existing) {
+        return false;
+      }
+
+      if (existing.info.PROP_STATUS !== 'DRAFT' && existing.info.PROP_STATUS !== 'REWORK') {
+        throw new Error(`Proposal '${code}' is in status '${existing.info.PROP_STATUS}' and cannot be deleted. Only DRAFT or REWORK proposals can be removed.`);
+      }
 
       await connection.execute(`DELETE FROM T_PROPOSAL_PREMIUM_SUMMARY WHERE PROP_NO = :code`, { code });
       await connection.execute(`DELETE FROM T_PROPOSAL_EXCLUSION WHERE PROP_NO = :code`, { code });

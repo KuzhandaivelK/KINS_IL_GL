@@ -35,7 +35,8 @@ import {
   HeartHandshake,
   ArrowUpRight,
   FileSpreadsheet,
-  Receipt
+  Receipt,
+  Eye
 } from 'lucide-react';
 import { proposalService } from '../services/proposalService';
 import { policyService } from '../services/policyService';
@@ -165,6 +166,14 @@ export const ProposalPage: React.FC = () => {
   const [covers, setCovers] = useState<CoverListItem[]>([]);
   const [mopOptions, setMopOptions] = useState<MopCodeOption[]>([]);
   const [proposalDetail, setProposalDetail] = useState<ProposalDetail | null>(null);
+
+  // Immutability: Proposals can ONLY be edited when in DRAFT or REWORK status
+  const isReadOnly = Boolean(
+    editingPropNo &&
+    proposalDetail &&
+    proposalDetail.info.PROP_STATUS !== 'DRAFT' &&
+    proposalDetail.info.PROP_STATUS !== 'REWORK'
+  );
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(false);
@@ -902,17 +911,27 @@ export const ProposalPage: React.FC = () => {
                             onClick={e => e.stopPropagation()}
                           >
                             <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleOpenEdit(p.PROP_NO, 1)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit / Review Proposal"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
+                              {p.PROP_STATUS === 'DRAFT' || p.PROP_STATUS === 'REWORK' ? (
+                                <button
+                                  onClick={() => handleOpenEdit(p.PROP_NO, 1)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Edit Proposal"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenEdit(p.PROP_NO, 1)}
+                                  className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                  title="View Proposal (Read-Only)"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleOpenEdit(p.PROP_NO, 8)}
                                 className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                                title="Underwriting Assessment"
+                                title="Underwriting Assessment & Workflow"
                               >
                                 <ShieldCheck className="w-4 h-4" />
                               </button>
@@ -934,13 +953,15 @@ export const ProposalPage: React.FC = () => {
                                   <FileSpreadsheet className="w-4 h-4" />
                                 </button>
                               )}
-                              <button
-                                onClick={() => handleDeleteProposal(p.PROP_NO)}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete Proposal"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {(p.PROP_STATUS === 'DRAFT' || p.PROP_STATUS === 'REWORK') && (
+                                <button
+                                  onClick={() => handleDeleteProposal(p.PROP_NO)}
+                                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete Draft Proposal"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -959,6 +980,40 @@ export const ProposalPage: React.FC = () => {
       {/* ========================================================================= */}
       {pageMode === 'stepper' && (
         <div className="space-y-6">
+          {/* Immutability / Read-Only Banner */}
+          {isReadOnly && proposalDetail && (
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+              proposalDetail.info.PROP_STATUS === 'CONVERTED'
+                ? 'bg-teal-50 border-teal-200 text-teal-900'
+                : proposalDetail.info.PROP_STATUS === 'APPROVED'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : proposalDetail.info.PROP_STATUS === 'REJECTED'
+                ? 'bg-red-50 border-red-200 text-red-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="w-5 h-5 mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="text-sm font-bold flex items-center gap-2">
+                    Proposal {proposalDetail.info.PROP_NO} — Read-Only Mode [{proposalDetail.info.PROP_STATUS}]
+                  </h4>
+                  <p className="text-xs mt-0.5 opacity-90">
+                    {proposalDetail.info.PROP_STATUS === 'CONVERTED'
+                      ? 'This proposal has been converted to an official Policy Contract. Proposal records are permanently immutable.'
+                      : proposalDetail.info.PROP_STATUS === 'APPROVED'
+                      ? 'This proposal has been authorized and approved by Underwriting. Record modifications are restricted.'
+                      : proposalDetail.info.PROP_STATUS === 'REJECTED'
+                      ? 'This proposal was declined/rejected and is closed.'
+                      : 'This proposal has been submitted for underwriting review and cannot be modified.'}
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 text-xs font-bold rounded-full bg-white/80 border border-current self-start sm:self-auto">
+                LOCKED (READ ONLY)
+              </span>
+            </div>
+          )}
+
           {/* Stepper Navigation Bar */}
           <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
             <div className="flex items-center justify-between min-w-[760px] gap-2">
@@ -1009,6 +1064,7 @@ export const ProposalPage: React.FC = () => {
 
           {/* Stepper Content Panels */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-6">
+            <fieldset disabled={isReadOnly && currentStep < 8} className="contents disabled:opacity-85">
             {/* ------------------------------------------------------------- */}
             {/* STEP 1: Plan & Product Information */}
             {/* ------------------------------------------------------------- */}
@@ -2000,6 +2056,7 @@ export const ProposalPage: React.FC = () => {
                 </div>
               </div>
             )}
+            </fieldset>
 
             {/* ------------------------------------------------------------- */}
             {/* STEP 8: Underwriting Assessment & Workflow Integration */}
@@ -2346,15 +2403,17 @@ export const ProposalPage: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={handleSaveProposal}
-                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-blue-600 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                <span>{isSaving ? 'Saving...' : 'Save Draft'}</span>
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={handleSaveProposal}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-blue-600 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSaving ? 'Saving...' : 'Save Draft'}</span>
+                </button>
+              )}
 
               {currentStep < 8 ? (
                 <button
@@ -2422,7 +2481,7 @@ export const ProposalPage: React.FC = () => {
                   <Send className="w-4 h-4" />
                   <span>Submit for Verification</span>
                 </button>
-              ) : (
+              ) : !isReadOnly ? (
                 <button
                   type="button"
                   disabled={isSaving}
@@ -2432,6 +2491,11 @@ export const ProposalPage: React.FC = () => {
                   <CheckCircle className="w-4 h-4" />
                   <span>Save Changes</span>
                 </button>
+              ) : (
+                <div className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Record Immutability Enforced</span>
+                </div>
               )}
             </div>
           </div>
