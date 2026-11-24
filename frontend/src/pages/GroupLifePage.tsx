@@ -22,6 +22,8 @@ import {
   Clock,
   Sparkles,
   Download,
+  UploadCloud,
+  FileUp,
   Printer,
   Trash2,
   Check,
@@ -30,7 +32,8 @@ import {
   BadgeAlert,
   Percent,
   Sliders,
-  Award
+  Award,
+  AlertCircle
 } from 'lucide-react';
 import { groupLifeService } from '../services/groupLifeService';
 import { productService } from '../services/productService';
@@ -44,7 +47,9 @@ import {
   GLPolicyDetail,
   GLBenefitStructure,
   GLPaymentFrequency,
-  ActuarialCalculationResult
+  ActuarialCalculationResult,
+  MemberUploadResult,
+  ParsedMemberRow
 } from '../types/groupLife';
 import { ProductItem } from '../types/product';
 import { CoverListItem } from '../types/cover';
@@ -139,6 +144,17 @@ export const GroupLifePage: React.FC = () => {
 
   // Step 4: Actuarial Calculation Result
   const [calcResult, setCalcResult] = useState<ActuarialCalculationResult | null>(null);
+
+  // Member Upload Modal & Parser State
+  const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+  const [uploadTargetPolicyNo, setUploadTargetPolicyNo] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<MemberUploadResult | null>(null);
+  const [isParsing, setIsParsing] = useState<boolean>(false);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
+  const [downloadingTemplate, setDownloadingTemplate] = useState<boolean>(false);
+  const [dragOver, setDragOver] = useState<boolean>(false);
 
   // ==========================================
   // INITIAL DATA LOADING
@@ -255,6 +271,123 @@ export const GroupLifePage: React.FC = () => {
     setMemberRoster(sample);
     setSuccessMsg('Populated 5 realistic corporate census members.');
     setTimeout(() => setSuccessMsg(null), 3000);
+  };
+
+  // Helper to open member upload modal for census
+  const handleOpenUploadForCensus = () => {
+    setUploadTargetPolicyNo(null);
+    setUploadFile(null);
+    setUploadResult(null);
+    setShowUploadModal(true);
+  };
+
+  // Helper to open member upload modal for policy
+  const handleOpenUploadForPolicy = (policyNo: string) => {
+    setUploadTargetPolicyNo(policyNo);
+    setUploadFile(null);
+    setUploadResult(null);
+    setShowUploadModal(true);
+  };
+
+  // Helper to process uploaded file (CSV or Excel)
+  const processUploadedFile = async (file: File) => {
+    const validExtensions = ['.csv', '.xlsx', '.xls'];
+    const lowerName = file.name.toLowerCase();
+    const isSupported = validExtensions.some((ext) => lowerName.endsWith(ext));
+    if (!isSupported) {
+      setError('Please upload a valid spreadsheet file (.csv, .xlsx, or .xls)');
+      return;
+    }
+
+    setUploadFile(file);
+    setIsParsing(true);
+    setError(null);
+    try {
+      const res = await groupLifeService.uploadAndParseMemberFile(file);
+      setUploadResult(res);
+    } catch (err: any) {
+      console.error('File parsing error:', err);
+      setError(err.message || 'Failed to parse member upload file');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  // Helper to download templates
+  const handleDownloadTemplate = async (format: 'xlsx' | 'csv') => {
+    setDownloadingTemplate(true);
+    try {
+      await groupLifeService.downloadTemplate(format);
+      setSuccessMsg(`Sample template (${format.toUpperCase()}) downloaded successfully.`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      console.error('Download template error:', err);
+      setError(err.message || 'Failed to download member census template');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  // Helper to commit parsed members
+  const handleConfirmImport = async () => {
+    if (!uploadResult || !uploadResult.members) return;
+
+    // Filter valid & warning rows (excluding error rows)
+    const validRows = uploadResult.members.filter((m) => m.status !== 'ERROR');
+    if (validRows.length === 0) {
+      setError('No valid member records found in the uploaded file to import.');
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      if (uploadTargetPolicyNo) {
+        // Enrolling directly into an existing Master Policy
+        const updatedPolicy = await groupLifeService.uploadPolicyMembers(uploadTargetPolicyNo, uploadFile!);
+        setSelectedPolicy(updatedPolicy);
+        const policyList = await groupLifeService.getPolicies();
+        setPolicies(policyList);
+        setShowUploadModal(false);
+        setSuccessMsg(`Successfully enrolled ${validRows.length} member(s) into Master Policy ${uploadTargetPolicyNo}.`);
+      } else {
+        // Populating census roster in the Quotation Wizard
+        const newMembers = validRows.map((m) => {
+          const mSal = m.monthlySalary || 0;
+          const aSal = m.annualSalary || mSal * 12;
+          return {
+            empId: m.empId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+            memberName: m.memberName,
+            dob: m.dob,
+            gender: m.gender,
+            category: m.category || 'Staff',
+            monthlySalary: mSal,
+            annualSalary: aSal,
+            sumAssured: m.sumAssured
+          };
+        });
+
+        if (importMode === 'replace') {
+          setMemberRoster(newMembers);
+        } else {
+          setMemberRoster([...memberRoster, ...newMembers]);
+        }
+
+        setShowUploadModal(false);
+        setSuccessMsg(`Successfully imported ${newMembers.length} member(s) into Census Schedule (${importMode === 'replace' ? 'replaced existing' : 'appended'}).`);
+        // Recalculate figures
+        setTimeout(() => {
+          runActuarialCalculation();
+        }, 150);
+      }
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Upload confirm error:', err);
+      setError(err.message || 'Failed to complete member import');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // Helper to save quotation
@@ -996,14 +1129,51 @@ export const GroupLifePage: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Upload Member File Button */}
+                  <button
+                    type="button"
+                    onClick={handleOpenUploadForCensus}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors shadow-xs"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Upload Member File (CSV / Excel)</span>
+                  </button>
+
+                  {/* Template Downloads */}
+                  <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 px-2 flex items-center gap-1">
+                      <Download className="w-3 h-3 text-slate-400" />
+                      Template:
+                    </span>
+                    <button
+                      type="button"
+                      disabled={downloadingTemplate}
+                      onClick={() => handleDownloadTemplate('xlsx')}
+                      className="px-2 py-1 text-[11px] font-bold text-teal-700 hover:bg-white rounded transition-colors"
+                      title="Download Excel (.xlsx) Template with instructions"
+                    >
+                      .XLSX
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      disabled={downloadingTemplate}
+                      onClick={() => handleDownloadTemplate('csv')}
+                      className="px-2 py-1 text-[11px] font-bold text-teal-700 hover:bg-white rounded transition-colors"
+                      title="Download CSV (.csv) Template"
+                    >
+                      .CSV
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handlePopulateSampleCensus}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 text-xs font-bold hover:bg-teal-100 transition-colors"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Generate 5 Sample Employees</span>
+                    <span>Sample Census</span>
                   </button>
 
                   <button
@@ -1717,9 +1887,19 @@ export const GroupLifePage: React.FC = () => {
 
               {/* Enrolled Employee Census Schedule */}
               <div>
-                <h3 className="text-xs font-black text-navy uppercase tracking-wider mb-2">
-                  Enrolled Insured Employee Census Roster ({selectedPolicy.members.length} Members)
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                  <h3 className="text-xs font-black text-navy uppercase tracking-wider">
+                    Enrolled Insured Employee Census Roster ({selectedPolicy.members.length} Members)
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenUploadForPolicy(selectedPolicy.master.MASTER_POLICY_NO)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold hover:bg-teal-100 transition-colors shadow-xs"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Upload & Enroll Members</span>
+                  </button>
+                </div>
                 <div className="border border-slate-200 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 sticky top-0">
@@ -1859,6 +2039,389 @@ export const GroupLifePage: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MEMBER CENSUS UPLOAD MODAL (CSV & EXCEL) */}
+      {/* ========================================================================= */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-200/80 bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-100/70 border border-teal-200 flex items-center justify-center text-teal-700">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-navy">
+                    {uploadTargetPolicyNo
+                      ? `Enroll Members into Master Policy: ${uploadTargetPolicyNo}`
+                      : 'Upload Group Life Member Census Schedule'}
+                  </h2>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Import member roster from Excel (<span className="font-semibold text-slate-700">.xlsx / .xls</span>) or <span className="font-semibold text-slate-700">.csv</span> with automatic column parsing.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadFile(null);
+                  setUploadResult(null);
+                }}
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              {/* Template Download Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-teal-50/60 border border-teal-200/70 text-xs">
+                <div className="flex items-center gap-2 text-teal-900">
+                  <FileSpreadsheet className="w-4 h-4 text-teal-700 shrink-0" />
+                  <span>
+                    Need the pre-formatted template with sample columns? Download below:
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={downloadingTemplate}
+                    onClick={() => handleDownloadTemplate('xlsx')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white font-bold text-[11px] hover:bg-teal-700 transition-colors shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Excel (.xlsx)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={downloadingTemplate}
+                    onClick={() => handleDownloadTemplate('csv')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-teal-300 text-teal-800 font-bold text-[11px] hover:bg-teal-50 transition-colors shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download CSV (.csv)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) processUploadedFile(file);
+                }}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+                  dragOver
+                    ? 'border-teal-500 bg-teal-50/40 ring-4 ring-teal-500/10'
+                    : 'border-slate-300 hover:border-teal-400 bg-slate-50/40'
+                }`}
+              >
+                <input
+                  type="file"
+                  id="censusFileInput"
+                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) processUploadedFile(f);
+                  }}
+                />
+
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-100/70 border border-teal-200 flex items-center justify-center text-teal-700 shadow-xs">
+                    <FileUp className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="censusFileInput"
+                      className="text-xs font-bold text-teal-700 hover:text-teal-800 hover:underline cursor-pointer"
+                    >
+                      Click to choose a file
+                    </label>
+                    <span className="text-xs text-slate-500"> or drag and drop your spreadsheet here</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Supports Microsoft Excel (.xlsx, .xls) and Comma-Separated Values (.csv) up to 10MB
+                  </p>
+                </div>
+              </div>
+
+              {/* Processing Loader */}
+              {isParsing && (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center gap-3 text-xs font-bold text-slate-700">
+                  <RefreshCw className="w-4 h-4 text-teal-600 animate-spin" />
+                  <span>Reading file, validating columns, and calculating age ratings...</span>
+                </div>
+              )}
+
+              {/* Uploaded File Details & Analysis Badges */}
+              {uploadFile && uploadResult && !isParsing && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-teal-600" />
+                      <span className="text-xs font-bold text-slate-800">{uploadFile.name}</span>
+                      <span className="text-[11px] text-slate-400">
+                        ({(uploadFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </div>
+
+                    <label
+                      htmlFor="censusFileInput"
+                      className="text-[11px] font-bold text-teal-700 hover:underline cursor-pointer self-start sm:self-auto"
+                    >
+                      Change File
+                    </label>
+                  </div>
+
+                  {/* Summary Counters */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">Total Rows</span>
+                      <p className="text-xl font-black text-navy mt-0.5">{uploadResult.totalRows}</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                      <span className="text-[10px] uppercase font-bold text-emerald-800">Valid Members</span>
+                      <p className="text-xl font-black text-emerald-700 mt-0.5">{uploadResult.validRowsCount}</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                      <span className="text-[10px] uppercase font-bold text-amber-800">Warnings</span>
+                      <p className="text-xl font-black text-amber-700 mt-0.5">{uploadResult.warningRowsCount}</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                      <span className="text-[10px] uppercase font-bold text-rose-800">Errors</span>
+                      <p className="text-xl font-black text-rose-700 mt-0.5">{uploadResult.errorRowsCount}</p>
+                    </div>
+                  </div>
+
+                  {/* Errors Alert if any */}
+                  {uploadResult.errors.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Identified {uploadResult.errors.length} row validation issue(s):</span>
+                      </div>
+                      <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-700 max-h-24 overflow-y-auto pl-1">
+                        {uploadResult.errors.map((e, idx) => (
+                          <li key={idx}>
+                            Row {e.row} {e.empId ? `(${e.empId})` : ''}: {e.message}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-[10px] text-rose-600 font-semibold pt-1">
+                        * Note: Rows with critical errors will be omitted; only valid members will be imported.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Preview Table */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-black text-navy uppercase tracking-wider">
+                        Parsed Members Preview (Showing {uploadResult.members.length} rows)
+                      </h3>
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        Green: Valid | Amber: Warning | Red: Error
+                      </span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto text-xs">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 sticky top-0">
+                          <tr>
+                            <th className="py-2 px-3">#</th>
+                            <th className="py-2 px-3">Emp ID</th>
+                            <th className="py-2 px-3">Name</th>
+                            <th className="py-2 px-3">DOB</th>
+                            <th className="py-2 px-3 text-center">Age / Gen</th>
+                            <th className="py-2 px-3">Category</th>
+                            <th className="py-2 px-3 text-right">Monthly Sal (OMR)</th>
+                            <th className="py-2 px-3 text-right">Sum Assured (OMR)</th>
+                            <th className="py-2 px-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {uploadResult.members.map((m, idx) => (
+                            <tr
+                              key={idx}
+                              className={`hover:bg-slate-50/50 ${
+                                m.status === 'ERROR'
+                                  ? 'bg-rose-50/30'
+                                  : m.status === 'WARNING'
+                                  ? 'bg-amber-50/20'
+                                  : ''
+                              }`}
+                            >
+                              <td className="py-1.5 px-3 font-mono text-[11px] text-slate-400">{m.rowNumber}</td>
+                              <td className="py-1.5 px-3 font-mono font-bold text-navy">{m.empId || 'N/A'}</td>
+                              <td className="py-1.5 px-3 font-semibold text-slate-800">{m.memberName}</td>
+                              <td className="py-1.5 px-3 text-slate-600">{m.dob || 'N/A'}</td>
+                              <td className="py-1.5 px-3 text-center">
+                                {m.age} / {m.gender}
+                              </td>
+                              <td className="py-1.5 px-3">{m.category}</td>
+                              <td className="py-1.5 px-3 text-right font-semibold text-slate-700">
+                                {Number(m.monthlySalary || 0).toLocaleString('en-US')}
+                              </td>
+                              <td className="py-1.5 px-3 text-right font-black text-navy">
+                                {m.sumAssured ? Number(m.sumAssured).toLocaleString('en-US') : 'Auto (Formula)'}
+                              </td>
+                              <td className="py-1.5 px-3 text-center">
+                                {m.status === 'VALID' && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    VALID
+                                  </span>
+                                )}
+                                {m.status === 'WARNING' && (
+                                  <span
+                                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200"
+                                    title={m.validationMessage}
+                                  >
+                                    WARNING
+                                  </span>
+                                )}
+                                {m.status === 'ERROR' && (
+                                  <span
+                                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200"
+                                    title={m.validationMessage}
+                                  >
+                                    ERROR
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Import Mode Options (only when in wizard census) */}
+                  {!uploadTargetPolicyNo && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                      <span className="text-xs font-bold text-navy uppercase tracking-wider block">
+                        Census Import Strategy:
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <label
+                          className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                            importMode === 'replace'
+                              ? 'border-teal-500 bg-teal-50/60 ring-2 ring-teal-500/10'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="importMode"
+                            checked={importMode === 'replace'}
+                            onChange={() => setImportMode('replace')}
+                            className="mt-0.5 text-teal-600 focus:ring-teal-500"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-800 block">Replace Existing Census</span>
+                            <span className="text-[11px] text-slate-500">
+                              Clears current roster ({memberRoster.length} members) and sets newly uploaded records.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label
+                          className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                            importMode === 'append'
+                              ? 'border-teal-500 bg-teal-50/60 ring-2 ring-teal-500/10'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="importMode"
+                            checked={importMode === 'append'}
+                            onChange={() => setImportMode('append')}
+                            className="mt-0.5 text-teal-600 focus:ring-teal-500"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-800 block">Append to Existing Census</span>
+                            <span className="text-[11px] text-slate-500">
+                              Preserves current {memberRoster.length} members and appends the uploaded valid rows.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 border-t border-slate-200/80 bg-slate-50/70">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadFile(null);
+                  setUploadResult(null);
+                }}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={
+                  isParsing ||
+                  isUploading ||
+                  !uploadResult ||
+                  uploadResult.members.filter((m) => m.status !== 'ERROR').length === 0
+                }
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-600 text-white font-bold text-xs hover:bg-teal-700 transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Importing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>
+                      {uploadTargetPolicyNo
+                        ? `Enroll ${
+                            uploadResult
+                              ? uploadResult.members.filter((m) => m.status !== 'ERROR').length
+                              : 0
+                          } Members into Policy`
+                        : `Confirm & Import ${
+                            uploadResult
+                              ? uploadResult.members.filter((m) => m.status !== 'ERROR').length
+                              : 0
+                          } Members`}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

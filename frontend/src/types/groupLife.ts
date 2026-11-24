@@ -222,3 +222,27 @@ export interface ActuarialCalculationResult {
   members: GLQuoteMemberRecord[];
   riders: GLQuoteRiderRecord[];
 }
+
+export interface ParsedMemberRow {
+  rowNumber: number;
+  empId: string;
+  memberName: string;
+  dob: string;
+  age: number;
+  gender: 'M' | 'F' | 'O';
+  category: string;
+  monthlySalary: number;
+  annualSalary: number;
+  sumAssured?: number;
+  status: 'VALID' | 'WARNING' | 'ERROR';
+  validationMessage?: string;
+}
+
+export interface MemberUploadResult {
+  totalRows: number;
+  validRowsCount: number;
+  errorRowsCount: number;
+  warningRowsCount: number;
+  members: ParsedMemberRow[];
+  errors: Array<{ row: number; empId?: string; message: string }>;
+}

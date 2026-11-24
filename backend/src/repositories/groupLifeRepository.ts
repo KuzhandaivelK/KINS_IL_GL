@@ -1014,5 +1014,131 @@ export const groupLifeRepository = {
     } finally {
       if (connection) await releaseConnection(connection);
     }
+  },
+
+  /**
+   * Add members to an existing GL Master Policy (e.g. from file upload or endorsement)
+   */
+  async addPolicyMembers(
+    policyNo: string,
+    members: Array<{
+      EMP_ID?: string;
+      MEMBER_NAME: string;
+      DOB: string;
+      AGE: number;
+      GENDER: string;
+      CATEGORY?: string;
+      MONTHLY_SALARY?: number;
+      ANNUAL_SALARY?: number;
+      SUM_ASSURED: number;
+      MEMBER_PREMIUM?: number;
+    }>,
+    user: string = 'ADMIN'
+  ): Promise<GLPolicyDetail> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+
+      const polCheck = await connection.execute<{ POL_STATUS: string }>(
+        `SELECT POL_STATUS FROM T_GL_POLICY_MASTER WHERE MASTER_POLICY_NO = :policyNo`,
+        { policyNo }
+      );
+      if (!polCheck.rows || polCheck.rows.length === 0) {
+        throw new Error(`Master Policy ${policyNo} not found`);
+      }
+
+      const memSql = `
+        INSERT INTO T_GL_POLICY_MEMBER (
+          MEMBER_ID,
+          MASTER_POLICY_NO,
+          EMP_ID,
+          MEMBER_NAME,
+          DOB,
+          AGE,
+          GENDER,
+          CATEGORY,
+          MONTHLY_SALARY,
+          ANNUAL_SALARY,
+          SUM_ASSURED,
+          MEMBER_PREMIUM,
+          MEMBER_STATUS,
+          IS_ACTIVE,
+          CREATED_BY,
+          CREATED_ON
+        ) VALUES (
+          SEQ_GL_POL_MEM_ID.NEXTVAL,
+          :policyNo,
+          :empId,
+          :memberName,
+          TO_DATE(:dob, 'YYYY-MM-DD'),
+          :age,
+          :gender,
+          :category,
+          :monthlySalary,
+          :annualSalary,
+          :sumAssured,
+          :memberPremium,
+          'ACTIVE',
+          'Y',
+          :appUser,
+          SYSDATE
+        )
+      `;
+
+      for (const m of members) {
+        const empId = m.EMP_ID || `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+        const monthlySal = m.MONTHLY_SALARY || 0;
+        const annualSal = m.ANNUAL_SALARY || (monthlySal > 0 ? monthlySal * 12 : 0);
+        const sa = m.SUM_ASSURED || (annualSal > 0 ? annualSal * 3 : 50000);
+        const prem = m.MEMBER_PREMIUM !== undefined ? m.MEMBER_PREMIUM : Math.round(sa * 0.0028);
+
+        await connection.execute(
+          memSql,
+          {
+            policyNo,
+            empId,
+            memberName: m.MEMBER_NAME,
+            dob: m.DOB,
+            age: m.AGE || 30,
+            gender: m.GENDER || 'M',
+            category: m.CATEGORY || 'Staff',
+            monthlySalary: monthlySal,
+            annualSalary: annualSal,
+            sumAssured: sa,
+            memberPremium: prem,
+            appUser: user
+          },
+          { autoCommit: false }
+        );
+      }
+
+      // Update aggregate figures in T_GL_POLICY_MASTER
+      const updateMasterSql = `
+        UPDATE T_GL_POLICY_MASTER
+        SET 
+          TOTAL_ACTIVE_MEMBERS = (SELECT COUNT(*) FROM T_GL_POLICY_MEMBER WHERE MASTER_POLICY_NO = :policyNo AND IS_ACTIVE = 'Y'),
+          TOTAL_INFORCE_SA = (SELECT NVL(SUM(SUM_ASSURED), 0) FROM T_GL_POLICY_MEMBER WHERE MASTER_POLICY_NO = :policyNo AND IS_ACTIVE = 'Y'),
+          TOTAL_INFORCE_PREMIUM = (SELECT NVL(SUM(MEMBER_PREMIUM), 0) FROM T_GL_POLICY_MEMBER WHERE MASTER_POLICY_NO = :policyNo AND IS_ACTIVE = 'Y'),
+          MODIFIED_BY = :appUser,
+          MODIFIED_ON = SYSDATE
+        WHERE MASTER_POLICY_NO = :policyNo
+      `;
+
+      await connection.execute(
+        updateMasterSql,
+        { policyNo, appUser: user },
+        { autoCommit: false }
+      );
+
+      await connection.commit();
+
+      const detail = await this.findPolicyByNo(policyNo);
+      return detail!;
+    } catch (err) {
+      if (connection) await connection.rollback();
+      throw err;
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
   }
 };

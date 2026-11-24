@@ -4,7 +4,8 @@ import {
   GLPolicyMasterRecord,
   GLPolicyDetail,
   SaveGLQuotePayload,
-  ActuarialCalculationResult
+  ActuarialCalculationResult,
+  MemberUploadResult
 } from '../types/groupLife';
 
 const API_BASE_URL = '/api/group-life';
@@ -175,6 +176,95 @@ export const groupLifeService = {
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.message || 'Failed to approve GL master policy');
+    }
+    return data.data;
+  },
+
+  /**
+   * Upload and parse member file (CSV, XLSX, XLS)
+   */
+  async uploadAndParseMemberFile(file: File): Promise<MemberUploadResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/members/parse-file`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to parse uploaded member file');
+    }
+    return data.data;
+  },
+
+  /**
+   * Download sample member census upload template (.xlsx or .csv)
+   */
+  async downloadTemplate(format: 'xlsx' | 'csv' = 'xlsx'): Promise<void> {
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/members/template?format=${format}`, {
+      method: 'GET',
+      headers,
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to download member template');
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gl_member_census_template.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  /**
+   * Upload members to an existing Master Policy
+   */
+  async uploadPolicyMembers(policyNo: string, file: File): Promise<GLPolicyDetail> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/policies/${encodeURIComponent(policyNo)}/members/upload`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to upload members to policy');
     }
     return data.data;
   }

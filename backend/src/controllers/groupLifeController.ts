@@ -1,5 +1,10 @@
 import { Request, Response } from 'express';
 import { groupLifeRepository } from '../repositories/groupLifeRepository';
+import {
+  parseMemberFileBuffer,
+  generateSampleExcelBuffer,
+  generateSampleCsvString
+} from '../utils/memberUploadParser';
 
 export const groupLifeController = {
   /**
@@ -181,6 +186,142 @@ export const groupLifeController = {
       return res.status(500).json({
         success: false,
         message: err.message || 'Failed to approve Group Life master policy'
+      });
+    }
+  },
+
+  /**
+   * Download sample member census upload template (.xlsx or .csv)
+   */
+  async downloadMemberTemplate(req: Request, res: Response) {
+    try {
+      const format = String(req.query.format || 'xlsx').toLowerCase();
+      if (format === 'csv') {
+        const csvContent = generateSampleCsvString();
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="gl_member_census_template.csv"');
+        return res.status(200).send(csvContent);
+      } else {
+        const buffer = generateSampleExcelBuffer();
+        res.setHeader(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader('Content-Disposition', 'attachment; filename="gl_member_census_template.xlsx"');
+        return res.status(200).send(buffer);
+      }
+    } catch (err: any) {
+      console.error('Download template error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to generate member template'
+      });
+    }
+  },
+
+  /**
+   * Parse uploaded member census file (CSV or Excel) for quotation / census wizard
+   */
+  async parseMemberFile(req: Request, res: Response) {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({
+          success: false,
+          message: 'No file uploaded. Please upload a .csv, .xlsx, or .xls file.'
+        });
+      }
+
+      const result = parseMemberFileBuffer(req.file.buffer, req.file.originalname);
+      return res.status(200).json({
+        success: true,
+        message: `Successfully parsed ${result.totalRows} member rows (${result.validRowsCount} valid, ${result.errorRowsCount} invalid)`,
+        data: result
+      });
+    } catch (err: any) {
+      console.error('Parse member file error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to parse member upload file'
+      });
+    }
+  },
+
+  /**
+   * Upload members directly to an active / pending GL Master Policy
+   */
+  async uploadPolicyMembers(req: Request, res: Response) {
+    try {
+      const { policyNo } = req.params;
+      const user = (req as any).user?.username || 'POLICY_ADMIN';
+
+      let membersToEnroll: Array<{
+        EMP_ID?: string;
+        MEMBER_NAME: string;
+        DOB: string;
+        AGE: number;
+        GENDER: string;
+        CATEGORY?: string;
+        MONTHLY_SALARY?: number;
+        ANNUAL_SALARY?: number;
+        SUM_ASSURED: number;
+        MEMBER_PREMIUM?: number;
+      }> = [];
+
+      // 1. If file uploaded
+      if (req.file && req.file.buffer) {
+        const parseResult = parseMemberFileBuffer(req.file.buffer, req.file.originalname);
+        const validRows = parseResult.members.filter(m => m.status !== 'ERROR');
+        if (validRows.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Uploaded file contains no valid member rows to enroll',
+            data: parseResult
+          });
+        }
+        membersToEnroll = validRows.map(m => ({
+          EMP_ID: m.empId,
+          MEMBER_NAME: m.memberName,
+          DOB: m.dob,
+          AGE: m.age,
+          GENDER: m.gender,
+          CATEGORY: m.category,
+          MONTHLY_SALARY: m.monthlySalary,
+          ANNUAL_SALARY: m.annualSalary,
+          SUM_ASSURED: m.sumAssured || (m.annualSalary > 0 ? m.annualSalary * 3 : 50000)
+        }));
+      } else if (req.body.members && Array.isArray(req.body.members)) {
+        // 2. If direct JSON array provided
+        membersToEnroll = req.body.members;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide either an uploaded file or a members array'
+        });
+      }
+
+      if (membersToEnroll.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No member records found to enroll'
+        });
+      }
+
+      const updatedPolicy = await groupLifeRepository.addPolicyMembers(
+        policyNo,
+        membersToEnroll,
+        user
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully enrolled ${membersToEnroll.length} member(s) into Master Policy ${policyNo}`,
+        data: updatedPolicy
+      });
+    } catch (err: any) {
+      console.error('Upload Policy Members error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to upload members to policy'
       });
     }
   }
