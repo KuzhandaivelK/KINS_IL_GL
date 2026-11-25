@@ -9,9 +9,15 @@ import {
   generateSampleCsvString
 } from '../utils/memberUploadParser';
 
-const EOI_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'eoi');
-if (!fs.existsSync(EOI_UPLOAD_DIR)) {
-  fs.mkdirSync(EOI_UPLOAD_DIR, { recursive: true });
+const DEFAULT_EOI_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'eoi');
+
+async function resolveEoiUploadDir(): Promise<string> {
+  const configuredPath = await groupLifeRepository.getEoiStoragePath();
+  const targetDir = configuredPath ? path.resolve(configuredPath) : DEFAULT_EOI_UPLOAD_DIR;
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  return targetDir;
 }
 
 export const groupLifeController = {
@@ -497,13 +503,10 @@ export const groupLifeController = {
         });
       }
 
-      if (!fs.existsSync(EOI_UPLOAD_DIR)) {
-        fs.mkdirSync(EOI_UPLOAD_DIR, { recursive: true });
-      }
-
+      const eoiDir = await resolveEoiUploadDir();
       const ext = path.extname(req.file.originalname) || '';
       const storedFileName = `EOI_${refNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${empId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
-      const fullPath = path.join(EOI_UPLOAD_DIR, storedFileName);
+      const fullPath = path.join(eoiDir, storedFileName);
       fs.writeFileSync(fullPath, req.file.buffer);
 
       const savedDoc = await groupLifeRepository.addEoiDocument({
@@ -514,6 +517,7 @@ export const groupLifeController = {
         docType,
         fileName: req.file.originalname,
         storedFileName,
+        filePath: fullPath,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
         remarks,
@@ -572,7 +576,10 @@ export const groupLifeController = {
         return res.status(404).json({ success: false, message: 'EOI document not found' });
       }
 
-      const fullPath = path.join(EOI_UPLOAD_DIR, doc.STORED_FILE_NAME);
+      const fallbackDir = await resolveEoiUploadDir();
+      const fullPath = doc.FILE_PATH && doc.FILE_PATH.trim()
+        ? doc.FILE_PATH.trim()
+        : path.join(fallbackDir, doc.STORED_FILE_NAME);
       if (!fs.existsSync(fullPath)) {
         return res.status(404).json({ success: false, message: 'Stored EOI document file not found on server' });
       }

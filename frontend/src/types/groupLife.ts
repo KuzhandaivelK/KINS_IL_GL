@@ -125,6 +125,7 @@ export interface GLEoiDocumentRecord {
   DOC_TYPE: string;
   FILE_NAME: string;
   STORED_FILE_NAME: string;
+  FILE_PATH?: string | null;
   MIME_TYPE?: string | null;
   FILE_SIZE: number;
   REMARKS?: string | null;

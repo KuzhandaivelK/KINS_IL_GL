@@ -463,7 +463,7 @@ export const groupLifeRepository = {
       const eoiDocSql = `
         SELECT
           EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
-          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          FILE_NAME, STORED_FILE_NAME, FILE_PATH, MIME_TYPE, FILE_SIZE, REMARKS,
           IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
         FROM T_GL_EOI_DOCUMENT
         WHERE REF_TYPE = 'QUOTE' AND REF_NO = :actualQuoteNo AND IS_ACTIVE = 'Y'
@@ -1149,12 +1149,12 @@ export const groupLifeRepository = {
       await connection.execute(
         `INSERT INTO T_GL_EOI_DOCUMENT (
           EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
-          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          FILE_NAME, STORED_FILE_NAME, FILE_PATH, MIME_TYPE, FILE_SIZE, REMARKS,
           IS_ACTIVE, UPLOADED_BY, UPLOADED_ON
         )
         SELECT
           SEQ_GL_EOI_DOC_ID.NEXTVAL, 'POLICY', :policyNo, pm.MEMBER_ID, d.EMP_ID, d.DOC_TYPE,
-          d.FILE_NAME, d.STORED_FILE_NAME, d.MIME_TYPE, d.FILE_SIZE, d.REMARKS,
+          d.FILE_NAME, d.STORED_FILE_NAME, d.FILE_PATH, d.MIME_TYPE, d.FILE_SIZE, d.REMARKS,
           'Y', d.UPLOADED_BY, d.UPLOADED_ON
         FROM T_GL_EOI_DOCUMENT d
         LEFT JOIN T_GL_POLICY_MEMBER pm ON pm.MASTER_POLICY_NO = :policyNo AND pm.EMP_ID = d.EMP_ID
@@ -1366,7 +1366,7 @@ export const groupLifeRepository = {
       const eoiDocSql = `
         SELECT
           EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
-          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          FILE_NAME, STORED_FILE_NAME, FILE_PATH, MIME_TYPE, FILE_SIZE, REMARKS,
           IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
         FROM T_GL_EOI_DOCUMENT
         WHERE REF_TYPE = 'POLICY' AND REF_NO = :policyNo AND IS_ACTIVE = 'Y'
@@ -1967,7 +1967,27 @@ export const groupLifeRepository = {
   },
 
   /**
-   * Add EOI Document Metadata record
+   * Read configured EOI Document storage directory path from STBL_SYS_PARAM (SYS_PARAM_DESC)
+   */
+  async getEoiStoragePath(): Promise<string | null> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<{ SYS_PARAM_DESC: string | null }>(
+        `SELECT SYS_PARAM_DESC
+         FROM STBL_SYS_PARAM
+         WHERE SYS_PARAM_CODE = 'GL_EOI_DOC_PATH'
+           AND SYS_SUB_PARAM = 'EOI_UPLOAD'`
+      );
+      const val = res.rows?.[0]?.SYS_PARAM_DESC;
+      return val && val.trim() ? val.trim() : null;
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Add EOI Document Metadata record (including actual FILE_PATH)
    */
   async addEoiDocument(doc: {
     refType: 'QUOTE' | 'POLICY';
@@ -1977,6 +1997,7 @@ export const groupLifeRepository = {
     docType: string;
     fileName: string;
     storedFileName: string;
+    filePath: string;
     mimeType?: string;
     fileSize: number;
     remarks?: string;
@@ -1988,11 +2009,11 @@ export const groupLifeRepository = {
       const res = await connection.execute<{ outId: number[] }>(
         `INSERT INTO T_GL_EOI_DOCUMENT (
           EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
-          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          FILE_NAME, STORED_FILE_NAME, FILE_PATH, MIME_TYPE, FILE_SIZE, REMARKS,
           IS_ACTIVE, UPLOADED_BY, UPLOADED_ON
         ) VALUES (
           SEQ_GL_EOI_DOC_ID.NEXTVAL, :refType, :refNo, :memberId, :empId, :docType,
-          :fileName, :storedFileName, :mimeType, :fileSize, :remarks,
+          :fileName, :storedFileName, :filePath, :mimeType, :fileSize, :remarks,
           'Y', :appUser, SYSDATE
         ) RETURNING EOI_DOC_ID INTO :outId`,
         {
@@ -2003,6 +2024,7 @@ export const groupLifeRepository = {
           docType: doc.docType,
           fileName: doc.fileName,
           storedFileName: doc.storedFileName,
+          filePath: doc.filePath,
           mimeType: doc.mimeType || 'application/octet-stream',
           fileSize: doc.fileSize,
           remarks: doc.remarks || null,
@@ -2029,7 +2051,7 @@ export const groupLifeRepository = {
       let sql = `
         SELECT
           EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
-          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          FILE_NAME, STORED_FILE_NAME, FILE_PATH, MIME_TYPE, FILE_SIZE, REMARKS,
           IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
         FROM T_GL_EOI_DOCUMENT
         WHERE REF_TYPE = :refType AND REF_NO = :refNo AND IS_ACTIVE = 'Y'
@@ -2057,7 +2079,7 @@ export const groupLifeRepository = {
       const res = await connection.execute<GLEoiDocumentRecord>(
         `SELECT
           EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
-          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          FILE_NAME, STORED_FILE_NAME, FILE_PATH, MIME_TYPE, FILE_SIZE, REMARKS,
           IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
          FROM T_GL_EOI_DOCUMENT
          WHERE EOI_DOC_ID = :docId AND IS_ACTIVE = 'Y'`,
