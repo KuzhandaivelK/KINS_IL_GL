@@ -54,6 +54,7 @@ import {
 import { ProductItem } from '../types/product';
 import { CoverListItem } from '../types/cover';
 import { GroupLifeMemberPremiums } from '../components/GroupLifeMemberPremiums';
+import { GroupLifeEoiManager } from '../components/GroupLifeEoiManager';
 
 const SAMPLE_MEMBERS = [
   { empId: 'EMP-1001', memberName: 'Ahmed Al-Harthy', dob: '1979-04-15', gender: 'M' as const, category: 'Executive', monthlySalary: 4500 },
@@ -68,8 +69,9 @@ export const GroupLifePage: React.FC = () => {
   const { user } = useAuth();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'quotes' | 'wizard' | 'policies' | 'member-premiums' | 'schedule'>('quotes');
+  const [activeTab, setActiveTab] = useState<'quotes' | 'wizard' | 'policies' | 'member-premiums' | 'eoi' | 'schedule'>('quotes');
   const [memberPremSource, setMemberPremSource] = useState<{ type: 'policy' | 'quote'; refNo?: string }>({ type: 'policy' });
+  const [eoiSource, setEoiSource] = useState<{ type: 'policy' | 'quote'; refNo?: string }>({ type: 'policy' });
 
   // Loading & error states
   const [loading, setLoading] = useState<boolean>(false);
@@ -128,6 +130,7 @@ export const GroupLifePage: React.FC = () => {
     monthlySalary: number;
     annualSalary: number;
     sumAssured?: number;
+    eoiFlag?: 'Y' | 'N';
   }>>([
     { empId: 'EMP-1001', memberName: 'Ahmed Al-Harthy', dob: '1979-04-15', gender: 'M', category: 'Executive', monthlySalary: 4500, annualSalary: 54000 },
     { empId: 'EMP-1002', memberName: 'Fatima Al-Balushi', dob: '1986-09-22', gender: 'F', category: 'Management', monthlySalary: 3200, annualSalary: 38400 },
@@ -712,6 +715,18 @@ export const GroupLifePage: React.FC = () => {
           <span>Member &amp; Cover Premiums</span>
         </button>
 
+        <button
+          onClick={() => setActiveTab('eoi')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'eoi'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-amber-700 hover:bg-slate-50'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>EOI &amp; Medical UW</span>
+        </button>
+
         {(selectedPolicy || selectedQuote) && (
           <button
             onClick={() => setActiveTab('schedule')}
@@ -1225,7 +1240,8 @@ export const GroupLifePage: React.FC = () => {
                       <th className="py-2.5 px-3">Category</th>
                       <th className="py-2.5 px-3 text-right">Monthly Sal (OMR)</th>
                       <th className="py-2.5 px-3 text-right">Computed SA (OMR)</th>
-                      <th className="py-2.5 px-3 text-center">FCL Underwriting</th>
+                      <th className="py-2.5 px-3 text-right">Rated SA (OMR)</th>
+                      <th className="py-2.5 px-3 text-center">EOI Flag (Full SA)</th>
                       <th className="py-2.5 px-3 text-center">Action</th>
                     </tr>
                   </thead>
@@ -1241,6 +1257,8 @@ export const GroupLifePage: React.FC = () => {
                         computedSa = m.sumAssured || 50000;
                       }
                       const isAboveFcl = computedSa > freeCoverLimit;
+                      const eoiYes = m.eoiFlag === 'Y';
+                      const effectiveSa = isAboveFcl && !eoiYes ? freeCoverLimit : computedSa;
 
                       return (
                         <tr key={idx} className="hover:bg-slate-50/50">
@@ -1324,14 +1342,61 @@ export const GroupLifePage: React.FC = () => {
                               className="w-24 text-right text-xs font-semibold border border-slate-200 rounded px-2 py-1"
                             />
                           </td>
-                          <td className="py-2 px-3 text-right font-black text-navy whitespace-nowrap">
+                          <td className="py-2 px-3 text-right font-bold text-slate-700 whitespace-nowrap">
                             {computedSa.toLocaleString('en-US')}
+                          </td>
+                          <td className="py-2 px-3 text-right whitespace-nowrap">
+                            <span
+                              className={`font-black ${
+                                isAboveFcl && !eoiYes
+                                  ? 'text-amber-700'
+                                  : isAboveFcl && eoiYes
+                                  ? 'text-emerald-700'
+                                  : 'text-navy'
+                              }`}
+                            >
+                              {effectiveSa.toLocaleString('en-US')}
+                            </span>
+                            {isAboveFcl && (
+                              <div className="text-[10px] font-semibold">
+                                {eoiYes ? (
+                                  <span className="text-emerald-600">Full SA (EOI Yes)</span>
+                                ) : (
+                                  <span className="text-amber-600">Capped at FCL</span>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-3 text-center whitespace-nowrap">
                             {isAboveFcl ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                EOI Required (&gt; FCL)
-                              </span>
+                              <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = [...memberRoster];
+                                    copy[idx].eoiFlag = 'Y';
+                                    setMemberRoster(copy);
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                    eoiYes ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white'
+                                  }`}
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = [...memberRoster];
+                                    copy[idx].eoiFlag = 'N';
+                                    setMemberRoster(copy);
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                    !eoiYes ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white'
+                                  }`}
+                                >
+                                  No
+                                </button>
+                              </div>
                             ) : (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                 Under FCL
@@ -1778,6 +1843,19 @@ export const GroupLifePage: React.FC = () => {
                             <span>Cover Premiums</span>
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEoiSource({ type: 'policy', refNo: p.MASTER_POLICY_NO });
+                              setActiveTab('eoi');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 font-bold text-[11px] hover:bg-amber-100 transition-colors"
+                            title="Manage EOI Flag & Collect EOI Documents"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>EOI</span>
+                          </button>
+
                           {p.POL_STATUS === 'PENDING_APPROVAL' && (
                             <button
                               type="button"
@@ -1809,6 +1887,19 @@ export const GroupLifePage: React.FC = () => {
           quotes={quotes}
           initialSourceType={memberPremSource.type}
           initialSourceNo={memberPremSource.refNo}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: EOI (EVIDENCE OF INSURABILITY) & MEDICAL UNDERWRITING */}
+      {/* ========================================================================= */}
+      {activeTab === 'eoi' && (
+        <GroupLifeEoiManager
+          policies={policies}
+          quotes={quotes}
+          initialSourceType={eoiSource.type}
+          initialSourceNo={eoiSource.refNo}
+          onDataUpdated={() => loadInitialData()}
         />
       )}
 

@@ -5,7 +5,8 @@ import {
   GLPolicyDetail,
   SaveGLQuotePayload,
   ActuarialCalculationResult,
-  MemberUploadResult
+  MemberUploadResult,
+  GLEoiDocumentRecord
 } from '../types/groupLife';
 
 const API_BASE_URL = '/api/group-life';
@@ -301,5 +302,138 @@ export const groupLifeService = {
       throw new Error(data.message || 'Failed to fetch quote member cover-wise premiums');
     }
     return data.data;
+  },
+
+  /**
+   * Update EOI Flag (Y/N) for a Policy Member and recalculate premiums
+   */
+  async updatePolicyMemberEoi(
+    policyNo: string,
+    memberId: number,
+    eoiFlag: 'Y' | 'N',
+    eoiRemarks?: string
+  ): Promise<GLPolicyDetail> {
+    const res = await fetch(
+      `${API_BASE_URL}/policies/${encodeURIComponent(policyNo)}/members/${memberId}/eoi`,
+      {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ eoiFlag, eoiRemarks })
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to update policy member EOI flag');
+    }
+    return data.data;
+  },
+
+  /**
+   * Update EOI Flag (Y/N) for a Quote Member and recalculate premiums
+   */
+  async updateQuoteMemberEoi(
+    quoteNo: string,
+    memberId: number,
+    eoiFlag: 'Y' | 'N',
+    eoiRemarks?: string
+  ): Promise<GLQuoteDetail> {
+    const res = await fetch(
+      `${API_BASE_URL}/quotes/${encodeURIComponent(quoteNo)}/members/${memberId}/eoi`,
+      {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ eoiFlag, eoiRemarks })
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to update quote member EOI flag');
+    }
+    return data.data;
+  },
+
+  /**
+   * Upload EOI Supporting Document
+   */
+  async uploadEoiDocument(params: {
+    file: File;
+    refType: 'QUOTE' | 'POLICY';
+    refNo: string;
+    memberId?: number;
+    empId: string;
+    docType: string;
+    remarks?: string;
+  }): Promise<GLEoiDocumentRecord> {
+    const formData = new FormData();
+    formData.append('file', params.file);
+    formData.append('refType', params.refType);
+    formData.append('refNo', params.refNo);
+    if (params.memberId !== undefined) formData.append('memberId', String(params.memberId));
+    formData.append('empId', params.empId);
+    formData.append('docType', params.docType);
+    if (params.remarks) formData.append('remarks', params.remarks);
+
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/eoi-documents/upload`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to upload EOI document');
+    }
+    return data.data;
+  },
+
+  /**
+   * Download an EOI Document
+   */
+  async downloadEoiDocument(docId: number, fileName: string): Promise<void> {
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/eoi-documents/${docId}/download`, {
+      method: 'GET',
+      headers,
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to download EOI document');
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  /**
+   * Delete an EOI Document
+   */
+  async deleteEoiDocument(docId: number): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/eoi-documents/${docId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to delete EOI document');
+    }
   }
 };

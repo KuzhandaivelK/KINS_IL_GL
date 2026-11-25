@@ -6,6 +6,7 @@ import {
   GLQuoteMemberRecord,
   GLQuoteRiderRecord,
   GLMemberCoverRecord,
+  GLEoiDocumentRecord,
   GLQuoteDetail,
   GLPolicyMasterRecord,
   GLPolicyMemberRecord,
@@ -77,8 +78,24 @@ export const groupLifeRepository = {
         memberRate = baseRatePerMille * 0.90;
       }
 
-      const premium = Math.round((sa * memberRate / 1000) * 100) / 100;
-      const uwFlag = sa > fcl ? 'EVIDENCE_REQUIRED' : 'UNDER_FCL';
+      // FCL / EOI Rule:
+      // If SA > FCL and EOI_FLAG !== 'Y', cap Effective Sum Assured at FCL for rating.
+      // If EOI_FLAG === 'Y', consider Full Sum Assured for premium calculation.
+      const isAboveFcl = sa > fcl;
+      const eoiFlag: 'Y' | 'N' = m.eoiFlag === 'Y' ? 'Y' : 'N';
+      const effectiveSa = isAboveFcl && eoiFlag !== 'Y' ? fcl : sa;
+      const eoiStatus: 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' = !isAboveFcl
+        ? 'NOT_REQUIRED'
+        : eoiFlag === 'Y'
+        ? 'APPROVED'
+        : 'PENDING';
+      const uwFlag = !isAboveFcl
+        ? 'UNDER_FCL'
+        : eoiFlag === 'Y'
+        ? 'EOI_APPROVED'
+        : 'EVIDENCE_REQUIRED';
+
+      const premium = Math.round((effectiveSa * memberRate / 1000) * 100) / 100;
 
       return {
         MEMBER_ID: idx + 1,
@@ -91,19 +108,23 @@ export const groupLifeRepository = {
         MONTHLY_SALARY: monthlySalary,
         ANNUAL_SALARY: annualSalary,
         SUM_ASSURED: sa,
+        EFFECTIVE_SA: effectiveSa,
         PREMIUM_AMOUNT: premium,
         UNDERWRITING_FLAG: uwFlag,
+        EOI_FLAG: eoiFlag,
+        EOI_STATUS: eoiStatus,
+        EOI_REMARKS: m.eoiRemarks || null,
         IS_ACTIVE: 'Y'
       };
     });
 
     const totalMembers = members.length;
-    const totalSumAssured = members.reduce((acc, m) => acc + m.SUM_ASSURED, 0);
+    const totalSumAssured = members.reduce((acc, m) => acc + Number(m.EFFECTIVE_SA ?? m.SUM_ASSURED), 0);
     const totalBasicPremiumGross = members.reduce((acc, m) => acc + m.PREMIUM_AMOUNT, 0);
     const discountAmount = Math.round((totalBasicPremiumGross * (experienceDiscountPct / 100)) * 100) / 100;
     const totalBasicPremium = Math.round((totalBasicPremiumGross - discountAmount) * 100) / 100;
 
-    // Riders calculation
+    // Riders calculation (based on Effective / Rated Sum Assured)
     const riders: GLQuoteRiderRecord[] = (payload.riders || []).map((r, idx) => {
       const saPercent = Number(r.saPercent || 100);
       const totalRiderSa = Math.round(totalSumAssured * (saPercent / 100));
@@ -127,9 +148,10 @@ export const groupLifeRepository = {
     const totalAnnualPremium = Math.round((totalBasicPremium + totalRiderPremium) * 100) / 100;
     const installmentPremium = Math.round((totalAnnualPremium * modalFactor) * 100) / 100;
 
-    // Build per-member cover-wise premium schedule (Basic Life + each selected Rider)
+    // Build per-member cover-wise premium schedule (Basic Life + each selected Rider) using EFFECTIVE_SA
     const memberCovers: GLMemberCoverRecord[] = [];
     for (const m of members) {
+      const ratedSa = Number(m.EFFECTIVE_SA ?? m.SUM_ASSURED);
       let memberRate = baseRatePerMille;
       if (m.AGE > 45) {
         memberRate = baseRatePerMille * (1 + ((m.AGE - 45) * 0.025));
@@ -153,7 +175,7 @@ export const groupLifeRepository = {
         COVER_NAME: 'Basic Group Term Life',
         COVER_TYPE: 'BASIC',
         SA_PERCENT: 100,
-        COVER_SUM_ASSURED: m.SUM_ASSURED,
+        COVER_SUM_ASSURED: ratedSa,
         RATE_PER_MILLE: memberRate,
         GROSS_PREMIUM: grossBasic,
         DISCOUNT_AMOUNT: discAmt,
@@ -162,7 +184,7 @@ export const groupLifeRepository = {
       });
 
       for (const r of riders) {
-        const coverSa = Math.round(m.SUM_ASSURED * (r.SA_PERCENT / 100));
+        const coverSa = Math.round(ratedSa * (r.SA_PERCENT / 100));
         const rPrem = Math.round((coverSa * r.RIDER_RATE_PER_MILLE / 1000) * 100) / 100;
 
         memberCovers.push({
@@ -379,8 +401,12 @@ export const groupLifeRepository = {
           MONTHLY_SALARY,
           ANNUAL_SALARY,
           SUM_ASSURED,
+          NVL(EFFECTIVE_SA, SUM_ASSURED) AS EFFECTIVE_SA,
           PREMIUM_AMOUNT,
           UNDERWRITING_FLAG,
+          NVL(EOI_FLAG, 'N') AS EOI_FLAG,
+          NVL(EOI_STATUS, 'NOT_REQUIRED') AS EOI_STATUS,
+          EOI_REMARKS,
           IS_ACTIVE
         FROM T_GL_QUOTE_MEMBER
         WHERE GL_QUOTE_NO = :actualQuoteNo
@@ -434,11 +460,23 @@ export const groupLifeRepository = {
       `;
       const memCovRes = await connection.execute<GLMemberCoverRecord>(memCovSql, { actualQuoteNo });
 
+      const eoiDocSql = `
+        SELECT
+          EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
+          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
+        FROM T_GL_EOI_DOCUMENT
+        WHERE REF_TYPE = 'QUOTE' AND REF_NO = :actualQuoteNo AND IS_ACTIVE = 'Y'
+        ORDER BY EOI_DOC_ID DESC
+      `;
+      const eoiDocRes = await connection.execute<GLEoiDocumentRecord>(eoiDocSql, { actualQuoteNo });
+
       return {
         header,
         members: memRes.rows || [],
         riders: riderRes.rows || [],
-        memberCovers: memCovRes.rows || []
+        memberCovers: memCovRes.rows || [],
+        eoiDocuments: eoiDocRes.rows || []
       };
     } finally {
       if (connection) await releaseConnection(connection);
@@ -591,8 +629,12 @@ export const groupLifeRepository = {
           MONTHLY_SALARY,
           ANNUAL_SALARY,
           SUM_ASSURED,
+          EFFECTIVE_SA,
           PREMIUM_AMOUNT,
           UNDERWRITING_FLAG,
+          EOI_FLAG,
+          EOI_STATUS,
+          EOI_REMARKS,
           IS_ACTIVE,
           CREATED_BY,
           CREATED_ON
@@ -608,8 +650,12 @@ export const groupLifeRepository = {
           :monthlySalary,
           :annualSalary,
           :sumAssured,
+          :effectiveSa,
           :premiumAmount,
           :uwFlag,
+          :eoiFlag,
+          :eoiStatus,
+          :eoiRemarks,
           'Y',
           :appUser,
           SYSDATE
@@ -668,8 +714,12 @@ export const groupLifeRepository = {
             monthlySalary: m.MONTHLY_SALARY,
             annualSalary: m.ANNUAL_SALARY,
             sumAssured: m.SUM_ASSURED,
+            effectiveSa: m.EFFECTIVE_SA ?? m.SUM_ASSURED,
             premiumAmount: m.PREMIUM_AMOUNT,
             uwFlag: m.UNDERWRITING_FLAG,
+            eoiFlag: m.EOI_FLAG || 'N',
+            eoiStatus: m.EOI_STATUS || 'NOT_REQUIRED',
+            eoiRemarks: m.EOI_REMARKS || null,
             appUser: user,
             outMemberId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
           },
@@ -871,8 +921,12 @@ export const groupLifeRepository = {
           MONTHLY_SALARY,
           ANNUAL_SALARY,
           SUM_ASSURED,
+          EFFECTIVE_SA,
           MEMBER_PREMIUM,
           MEMBER_STATUS,
+          EOI_FLAG,
+          EOI_STATUS,
+          EOI_REMARKS,
           IS_ACTIVE,
           CREATED_BY,
           CREATED_ON
@@ -888,8 +942,12 @@ export const groupLifeRepository = {
           :monthlySalary,
           :annualSalary,
           :sumAssured,
+          :effectiveSa,
           :memberPremium,
           'ACTIVE',
+          :eoiFlag,
+          :eoiStatus,
+          :eoiRemarks,
           'Y',
           :appUser,
           SYSDATE
@@ -950,7 +1008,11 @@ export const groupLifeRepository = {
             monthlySalary: m.MONTHLY_SALARY,
             annualSalary: m.ANNUAL_SALARY,
             sumAssured: m.SUM_ASSURED,
+            effectiveSa: m.EFFECTIVE_SA ?? m.SUM_ASSURED,
             memberPremium: m.PREMIUM_AMOUNT,
+            eoiFlag: m.EOI_FLAG || 'N',
+            eoiStatus: m.EOI_STATUS || 'NOT_REQUIRED',
+            eoiRemarks: m.EOI_REMARKS || null,
             appUser: user,
             outMemberId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
           },
@@ -1082,6 +1144,24 @@ export const groupLifeRepository = {
           { autoCommit: false }
         );
       }
+
+      // Copy EOI Documents from Quote to Master Policy (if any)
+      await connection.execute(
+        `INSERT INTO T_GL_EOI_DOCUMENT (
+          EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
+          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          IS_ACTIVE, UPLOADED_BY, UPLOADED_ON
+        )
+        SELECT
+          SEQ_GL_EOI_DOC_ID.NEXTVAL, 'POLICY', :policyNo, pm.MEMBER_ID, d.EMP_ID, d.DOC_TYPE,
+          d.FILE_NAME, d.STORED_FILE_NAME, d.MIME_TYPE, d.FILE_SIZE, d.REMARKS,
+          'Y', d.UPLOADED_BY, d.UPLOADED_ON
+        FROM T_GL_EOI_DOCUMENT d
+        LEFT JOIN T_GL_POLICY_MEMBER pm ON pm.MASTER_POLICY_NO = :policyNo AND pm.EMP_ID = d.EMP_ID
+        WHERE d.REF_TYPE = 'QUOTE' AND d.REF_NO = :quoteNo AND d.IS_ACTIVE = 'Y'`,
+        { policyNo, quoteNo: q.GL_QUOTE_NO },
+        { autoCommit: false }
+      );
 
       // Update Quote Status to CONVERTED
       await connection.execute(
@@ -1227,8 +1307,12 @@ export const groupLifeRepository = {
           MONTHLY_SALARY,
           ANNUAL_SALARY,
           SUM_ASSURED,
+          NVL(EFFECTIVE_SA, SUM_ASSURED) AS EFFECTIVE_SA,
           MEMBER_PREMIUM,
           MEMBER_STATUS,
+          NVL(EOI_FLAG, 'N') AS EOI_FLAG,
+          NVL(EOI_STATUS, 'NOT_REQUIRED') AS EOI_STATUS,
+          EOI_REMARKS,
           IS_ACTIVE
         FROM T_GL_POLICY_MEMBER
         WHERE MASTER_POLICY_NO = :policyNo
@@ -1279,11 +1363,23 @@ export const groupLifeRepository = {
       `;
       const memCovRes = await connection.execute<GLMemberCoverRecord>(memCovSql, { policyNo });
 
+      const eoiDocSql = `
+        SELECT
+          EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
+          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
+        FROM T_GL_EOI_DOCUMENT
+        WHERE REF_TYPE = 'POLICY' AND REF_NO = :policyNo AND IS_ACTIVE = 'Y'
+        ORDER BY EOI_DOC_ID DESC
+      `;
+      const eoiDocRes = await connection.execute<GLEoiDocumentRecord>(eoiDocSql, { policyNo });
+
       return {
         master,
         members: memRes.rows || [],
         riders: riderRes.rows || [],
-        memberCovers: memCovRes.rows || []
+        memberCovers: memCovRes.rows || [],
+        eoiDocuments: eoiDocRes.rows || []
       };
     } finally {
       if (connection) await releaseConnection(connection);
@@ -1350,10 +1446,11 @@ export const groupLifeRepository = {
       const polCheck = await connection.execute<{
         POL_STATUS: string;
         GL_QUOTE_NO: string;
+        FREE_COVER_LIMIT: number;
         BASE_RATE_PER_MILLE: number;
         EXPERIENCE_DISCOUNT_PCT: number;
       }>(
-        `SELECT p.POL_STATUS, p.GL_QUOTE_NO, NVL(q.BASE_RATE_PER_MILLE, 2.5) AS BASE_RATE_PER_MILLE, NVL(q.EXPERIENCE_DISCOUNT_PCT, 0) AS EXPERIENCE_DISCOUNT_PCT
+        `SELECT p.POL_STATUS, p.GL_QUOTE_NO, NVL(p.FREE_COVER_LIMIT, 250000) AS FREE_COVER_LIMIT, NVL(q.BASE_RATE_PER_MILLE, 2.5) AS BASE_RATE_PER_MILLE, NVL(q.EXPERIENCE_DISCOUNT_PCT, 0) AS EXPERIENCE_DISCOUNT_PCT
          FROM T_GL_POLICY_MASTER p
          LEFT JOIN T_GL_QUOTE_HEADER q ON q.GL_QUOTE_NO = p.GL_QUOTE_NO
          WHERE p.MASTER_POLICY_NO = :policyNo`,
@@ -1364,6 +1461,7 @@ export const groupLifeRepository = {
       }
 
       const polMeta = polCheck.rows[0];
+      const fcl = Number(polMeta.FREE_COVER_LIMIT || 250000);
       const baseRate = Number(polMeta.BASE_RATE_PER_MILLE || 2.5);
       const discPct = Number(polMeta.EXPERIENCE_DISCOUNT_PCT || 0);
 
@@ -1396,8 +1494,11 @@ export const groupLifeRepository = {
           MONTHLY_SALARY,
           ANNUAL_SALARY,
           SUM_ASSURED,
+          EFFECTIVE_SA,
           MEMBER_PREMIUM,
           MEMBER_STATUS,
+          EOI_FLAG,
+          EOI_STATUS,
           IS_ACTIVE,
           CREATED_BY,
           CREATED_ON
@@ -1413,8 +1514,11 @@ export const groupLifeRepository = {
           :monthlySalary,
           :annualSalary,
           :sumAssured,
+          :effectiveSa,
           :memberPremium,
           'ACTIVE',
+          :eoiFlag,
+          :eoiStatus,
           'Y',
           :appUser,
           SYSDATE
@@ -1465,13 +1569,17 @@ export const groupLifeRepository = {
         const annualSal = m.ANNUAL_SALARY || (monthlySal > 0 ? monthlySal * 12 : 0);
         const sa = m.SUM_ASSURED || (annualSal > 0 ? annualSal * 3 : 50000);
         const age = m.AGE || 30;
+        const isAboveFcl = sa > fcl;
+        const eoiFlag = 'N';
+        const effectiveSa = isAboveFcl ? fcl : sa;
+        const eoiStatus = isAboveFcl ? 'PENDING' : 'NOT_REQUIRED';
 
         let memRate = baseRate;
         if (age > 45) memRate = baseRate * (1 + (age - 45) * 0.025);
         else if (age < 25) memRate = baseRate * 0.9;
         memRate = Math.round(memRate * 10000) / 10000;
 
-        const grossBasic = Math.round((sa * memRate / 1000) * 100) / 100;
+        const grossBasic = Math.round((effectiveSa * memRate / 1000) * 100) / 100;
         const discAmt = Math.round((grossBasic * discPct / 100) * 100) / 100;
         const netBasic = Math.round((grossBasic - discAmt) * 100) / 100;
 
@@ -1490,7 +1598,10 @@ export const groupLifeRepository = {
             monthlySalary: monthlySal,
             annualSalary: annualSal,
             sumAssured: sa,
+            effectiveSa,
             memberPremium: prem,
+            eoiFlag,
+            eoiStatus,
             appUser: user,
             outMemberId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
           },
@@ -1499,7 +1610,7 @@ export const groupLifeRepository = {
 
         const insertedPolMemId = (memExecRes.outBinds as any)?.outMemberId?.[0];
 
-        // Insert Basic Life cover row
+        // Insert Basic Life cover row (rated on effectiveSa)
         await connection.execute(
           polMemCovSql,
           {
@@ -1510,7 +1621,7 @@ export const groupLifeRepository = {
             coverName: 'Basic Group Term Life',
             coverType: 'BASIC',
             saPercent: 100,
-            coverSa: sa,
+            coverSa: effectiveSa,
             ratePerMille: memRate,
             grossPremium: grossBasic,
             discountAmount: discAmt,
@@ -1520,10 +1631,10 @@ export const groupLifeRepository = {
           { autoCommit: false }
         );
 
-        // Insert each attached Rider cover row
+        // Insert each attached Rider cover row (rated on effectiveSa)
         for (const r of policyRiders) {
           const saPct = Number(r.SA_PERCENT || 100);
-          const rSa = Math.round(sa * saPct / 100);
+          const rSa = Math.round(effectiveSa * saPct / 100);
           const rRate = Number(r.RIDER_RATE_PER_MILLE || 0.45);
           const rPrem = Math.round((rSa * rRate / 1000) * 100) / 100;
 
@@ -1584,6 +1695,392 @@ export const groupLifeRepository = {
     } catch (err) {
       if (connection) await connection.rollback();
       throw err;
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Update EOI Flag (Y/N) for a Policy or Quote Member and recalculate cover-wise premiums
+   * - If EOI_FLAG = 'Y': uses Full SUM_ASSURED for Basic Life and all Rider covers
+   * - If EOI_FLAG = 'N' and SUM_ASSURED > FREE_COVER_LIMIT: caps EFFECTIVE_SA at FREE_COVER_LIMIT
+   */
+  async updateMemberEoi(
+    refType: 'QUOTE' | 'POLICY',
+    refNo: string,
+    memberId: number,
+    eoiFlag: 'Y' | 'N',
+    eoiRemarks?: string,
+    user: string = 'UNDERWRITER'
+  ): Promise<GLPolicyDetail | GLQuoteDetail> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+
+      if (refType === 'POLICY') {
+        const metaRes = await connection.execute<{
+          FREE_COVER_LIMIT: number;
+          GL_QUOTE_NO: string;
+          BASE_RATE_PER_MILLE: number;
+          EXPERIENCE_DISCOUNT_PCT: number;
+        }>(
+          `SELECT p.FREE_COVER_LIMIT, p.GL_QUOTE_NO, NVL(q.BASE_RATE_PER_MILLE, 2.5) AS BASE_RATE_PER_MILLE, NVL(q.EXPERIENCE_DISCOUNT_PCT, 0) AS EXPERIENCE_DISCOUNT_PCT
+           FROM T_GL_POLICY_MASTER p
+           LEFT JOIN T_GL_QUOTE_HEADER q ON q.GL_QUOTE_NO = p.GL_QUOTE_NO
+           WHERE p.MASTER_POLICY_NO = :refNo`,
+          { refNo }
+        );
+        if (!metaRes.rows || metaRes.rows.length === 0) {
+          throw new Error(`Master Policy ${refNo} not found`);
+        }
+        const meta = metaRes.rows[0];
+        const fcl = Number(meta.FREE_COVER_LIMIT || 250000);
+        const baseRate = Number(meta.BASE_RATE_PER_MILLE || 2.5);
+        const discPct = Number(meta.EXPERIENCE_DISCOUNT_PCT || 0);
+
+        const memRes = await connection.execute<{
+          MEMBER_ID: number;
+          EMP_ID: string;
+          AGE: number;
+          SUM_ASSURED: number;
+        }>(
+          `SELECT MEMBER_ID, EMP_ID, AGE, SUM_ASSURED FROM T_GL_POLICY_MEMBER WHERE MASTER_POLICY_NO = :refNo AND MEMBER_ID = :memberId`,
+          { refNo, memberId }
+        );
+        if (!memRes.rows || memRes.rows.length === 0) {
+          throw new Error(`Member ${memberId} not found on Policy ${refNo}`);
+        }
+        const mem = memRes.rows[0];
+        const fullSa = Number(mem.SUM_ASSURED || 0);
+        const isAboveFcl = fullSa > fcl;
+        const effectiveSa = isAboveFcl && eoiFlag !== 'Y' ? fcl : fullSa;
+        const eoiStatus = !isAboveFcl ? 'NOT_REQUIRED' : eoiFlag === 'Y' ? 'APPROVED' : 'PENDING';
+
+        let memRate = baseRate;
+        if (mem.AGE > 45) memRate = baseRate * (1 + (mem.AGE - 45) * 0.025);
+        else if (mem.AGE < 25) memRate = baseRate * 0.9;
+        memRate = Math.round(memRate * 10000) / 10000;
+
+        const grossBasic = Math.round((effectiveSa * memRate / 1000) * 100) / 100;
+        const discAmt = Math.round((grossBasic * discPct / 100) * 100) / 100;
+        const netBasic = Math.round((grossBasic - discAmt) * 100) / 100;
+
+        // 1. Update member EOI fields & effective SA
+        await connection.execute(
+          `UPDATE T_GL_POLICY_MEMBER
+           SET EOI_FLAG = :eoiFlag,
+               EOI_STATUS = :eoiStatus,
+               EFFECTIVE_SA = :effectiveSa,
+               MEMBER_PREMIUM = :grossBasic,
+               EOI_REMARKS = :eoiRemarks
+           WHERE MASTER_POLICY_NO = :refNo AND MEMBER_ID = :memberId`,
+          { eoiFlag, eoiStatus, effectiveSa, grossBasic, eoiRemarks: eoiRemarks || null, refNo, memberId },
+          { autoCommit: false }
+        );
+
+        // 2. Recalculate Basic Life cover in T_GL_POLICY_MEMBER_COVER
+        await connection.execute(
+          `UPDATE T_GL_POLICY_MEMBER_COVER
+           SET COVER_SUM_ASSURED = :effectiveSa,
+               RATE_PER_MILLE = :memRate,
+               GROSS_PREMIUM = :grossBasic,
+               DISCOUNT_AMOUNT = :discAmt,
+               NET_PREMIUM = :netBasic
+           WHERE MASTER_POLICY_NO = :refNo AND MEMBER_ID = :memberId AND COVER_TYPE = 'BASIC'`,
+          { effectiveSa, memRate, grossBasic, discAmt, netBasic, refNo, memberId },
+          { autoCommit: false }
+        );
+
+        // 3. Recalculate all Rider covers for this member in T_GL_POLICY_MEMBER_COVER
+        const riderCovs = await connection.execute<{
+          POL_MEM_COVER_ID: number;
+          SA_PERCENT: number;
+          RATE_PER_MILLE: number;
+        }>(
+          `SELECT POL_MEM_COVER_ID, SA_PERCENT, RATE_PER_MILLE FROM T_GL_POLICY_MEMBER_COVER
+           WHERE MASTER_POLICY_NO = :refNo AND MEMBER_ID = :memberId AND COVER_TYPE = 'RIDER'`,
+          { refNo, memberId }
+        );
+        for (const rc of riderCovs.rows || []) {
+          const rSa = Math.round(effectiveSa * (Number(rc.SA_PERCENT || 100) / 100));
+          const rPrem = Math.round((rSa * Number(rc.RATE_PER_MILLE || 0.45) / 1000) * 100) / 100;
+          await connection.execute(
+            `UPDATE T_GL_POLICY_MEMBER_COVER
+             SET COVER_SUM_ASSURED = :rSa, GROSS_PREMIUM = :rPrem, NET_PREMIUM = :rPrem
+             WHERE POL_MEM_COVER_ID = :covId`,
+            { rSa, rPrem, covId: rc.POL_MEM_COVER_ID },
+            { autoCommit: false }
+          );
+        }
+
+        // 4. Sync Policy Riders and Policy Master totals
+        await connection.execute(
+          `UPDATE T_GL_POLICY_RIDER r
+           SET TOTAL_RIDER_SA = NVL((SELECT SUM(c.COVER_SUM_ASSURED) FROM T_GL_POLICY_MEMBER_COVER c WHERE c.MASTER_POLICY_NO = r.MASTER_POLICY_NO AND c.COVER_CODE = r.RIDER_CODE AND c.IS_ACTIVE = 'Y'), 0),
+               RIDER_PREMIUM = NVL((SELECT SUM(c.NET_PREMIUM) FROM T_GL_POLICY_MEMBER_COVER c WHERE c.MASTER_POLICY_NO = r.MASTER_POLICY_NO AND c.COVER_CODE = r.RIDER_CODE AND c.IS_ACTIVE = 'Y'), 0)
+           WHERE r.MASTER_POLICY_NO = :refNo`,
+          { refNo },
+          { autoCommit: false }
+        );
+
+        await connection.execute(
+          `UPDATE T_GL_POLICY_MASTER
+           SET TOTAL_INFORCE_SA = (SELECT NVL(SUM(NVL(EFFECTIVE_SA, SUM_ASSURED)), 0) FROM T_GL_POLICY_MEMBER WHERE MASTER_POLICY_NO = :refNo AND IS_ACTIVE = 'Y'),
+               TOTAL_INFORCE_PREMIUM = (SELECT NVL(SUM(NET_PREMIUM), 0) FROM T_GL_POLICY_MEMBER_COVER WHERE MASTER_POLICY_NO = :refNo AND IS_ACTIVE = 'Y'),
+               MODIFIED_BY = :appUser,
+               MODIFIED_ON = SYSDATE
+           WHERE MASTER_POLICY_NO = :refNo`,
+          { refNo, appUser: user },
+          { autoCommit: false }
+        );
+
+        await connection.commit();
+        return (await this.findPolicyByNo(refNo))!;
+      } else {
+        // QUOTE EOI UPDATE
+        const metaRes = await connection.execute<{
+          FREE_COVER_LIMIT: number;
+          BASE_RATE_PER_MILLE: number;
+          EXPERIENCE_DISCOUNT_PCT: number;
+          MODAL_FACTOR: number;
+        }>(
+          `SELECT FREE_COVER_LIMIT, BASE_RATE_PER_MILLE, EXPERIENCE_DISCOUNT_PCT, MODAL_FACTOR
+           FROM T_GL_QUOTE_HEADER WHERE GL_QUOTE_NO = :refNo`,
+          { refNo }
+        );
+        if (!metaRes.rows || metaRes.rows.length === 0) {
+          throw new Error(`Quote ${refNo} not found`);
+        }
+        const meta = metaRes.rows[0];
+        const fcl = Number(meta.FREE_COVER_LIMIT || 250000);
+        const baseRate = Number(meta.BASE_RATE_PER_MILLE || 2.5);
+        const discPct = Number(meta.EXPERIENCE_DISCOUNT_PCT || 0);
+        const modalFactor = Number(meta.MODAL_FACTOR || 1.0);
+
+        const memRes = await connection.execute<{
+          MEMBER_ID: number;
+          EMP_ID: string;
+          AGE: number;
+          SUM_ASSURED: number;
+        }>(
+          `SELECT MEMBER_ID, EMP_ID, AGE, SUM_ASSURED FROM T_GL_QUOTE_MEMBER WHERE GL_QUOTE_NO = :refNo AND MEMBER_ID = :memberId`,
+          { refNo, memberId }
+        );
+        if (!memRes.rows || memRes.rows.length === 0) {
+          throw new Error(`Member ${memberId} not found on Quote ${refNo}`);
+        }
+        const mem = memRes.rows[0];
+        const fullSa = Number(mem.SUM_ASSURED || 0);
+        const isAboveFcl = fullSa > fcl;
+        const effectiveSa = isAboveFcl && eoiFlag !== 'Y' ? fcl : fullSa;
+        const eoiStatus = !isAboveFcl ? 'NOT_REQUIRED' : eoiFlag === 'Y' ? 'APPROVED' : 'PENDING';
+        const uwFlag = !isAboveFcl ? 'UNDER_FCL' : eoiFlag === 'Y' ? 'EOI_APPROVED' : 'EVIDENCE_REQUIRED';
+
+        let memRate = baseRate;
+        if (mem.AGE > 45) memRate = baseRate * (1 + (mem.AGE - 45) * 0.025);
+        else if (mem.AGE < 25) memRate = baseRate * 0.9;
+        memRate = Math.round(memRate * 10000) / 10000;
+
+        const grossBasic = Math.round((effectiveSa * memRate / 1000) * 100) / 100;
+        const discAmt = Math.round((grossBasic * discPct / 100) * 100) / 100;
+        const netBasic = Math.round((grossBasic - discAmt) * 100) / 100;
+
+        await connection.execute(
+          `UPDATE T_GL_QUOTE_MEMBER
+           SET EOI_FLAG = :eoiFlag,
+               EOI_STATUS = :eoiStatus,
+               UNDERWRITING_FLAG = :uwFlag,
+               EFFECTIVE_SA = :effectiveSa,
+               PREMIUM_AMOUNT = :grossBasic,
+               EOI_REMARKS = :eoiRemarks
+           WHERE GL_QUOTE_NO = :refNo AND MEMBER_ID = :memberId`,
+          { eoiFlag, eoiStatus, uwFlag, effectiveSa, grossBasic, eoiRemarks: eoiRemarks || null, refNo, memberId },
+          { autoCommit: false }
+        );
+
+        await connection.execute(
+          `UPDATE T_GL_QUOTE_MEMBER_COVER
+           SET COVER_SUM_ASSURED = :effectiveSa,
+               RATE_PER_MILLE = :memRate,
+               GROSS_PREMIUM = :grossBasic,
+               DISCOUNT_AMOUNT = :discAmt,
+               NET_PREMIUM = :netBasic
+           WHERE GL_QUOTE_NO = :refNo AND MEMBER_ID = :memberId AND COVER_TYPE = 'BASIC'`,
+          { effectiveSa, memRate, grossBasic, discAmt, netBasic, refNo, memberId },
+          { autoCommit: false }
+        );
+
+        const riderCovs = await connection.execute<{
+          MEM_COVER_ID: number;
+          SA_PERCENT: number;
+          RATE_PER_MILLE: number;
+        }>(
+          `SELECT MEM_COVER_ID, SA_PERCENT, RATE_PER_MILLE FROM T_GL_QUOTE_MEMBER_COVER
+           WHERE GL_QUOTE_NO = :refNo AND MEMBER_ID = :memberId AND COVER_TYPE = 'RIDER'`,
+          { refNo, memberId }
+        );
+        for (const rc of riderCovs.rows || []) {
+          const rSa = Math.round(effectiveSa * (Number(rc.SA_PERCENT || 100) / 100));
+          const rPrem = Math.round((rSa * Number(rc.RATE_PER_MILLE || 0.45) / 1000) * 100) / 100;
+          await connection.execute(
+            `UPDATE T_GL_QUOTE_MEMBER_COVER
+             SET COVER_SUM_ASSURED = :rSa, GROSS_PREMIUM = :rPrem, NET_PREMIUM = :rPrem
+             WHERE MEM_COVER_ID = :covId`,
+            { rSa, rPrem, covId: rc.MEM_COVER_ID },
+            { autoCommit: false }
+          );
+        }
+
+        // Sync Quote Riders and Header totals
+        await connection.execute(
+          `UPDATE T_GL_QUOTE_RIDER r
+           SET TOTAL_RIDER_SA = NVL((SELECT SUM(c.COVER_SUM_ASSURED) FROM T_GL_QUOTE_MEMBER_COVER c WHERE c.GL_QUOTE_NO = r.GL_QUOTE_NO AND c.COVER_CODE = r.RIDER_CODE AND c.IS_ACTIVE = 'Y'), 0),
+               RIDER_PREMIUM = NVL((SELECT SUM(c.NET_PREMIUM) FROM T_GL_QUOTE_MEMBER_COVER c WHERE c.GL_QUOTE_NO = r.GL_QUOTE_NO AND c.COVER_CODE = r.RIDER_CODE AND c.IS_ACTIVE = 'Y'), 0)
+           WHERE r.GL_QUOTE_NO = :refNo`,
+          { refNo },
+          { autoCommit: false }
+        );
+
+        await connection.execute(
+          `UPDATE T_GL_QUOTE_HEADER
+           SET TOTAL_SUM_ASSURED = (SELECT NVL(SUM(NVL(EFFECTIVE_SA, SUM_ASSURED)), 0) FROM T_GL_QUOTE_MEMBER WHERE GL_QUOTE_NO = :refNo AND IS_ACTIVE = 'Y'),
+               TOTAL_BASIC_PREMIUM = (SELECT NVL(SUM(NET_PREMIUM), 0) FROM T_GL_QUOTE_MEMBER_COVER WHERE GL_QUOTE_NO = :refNo AND COVER_TYPE = 'BASIC' AND IS_ACTIVE = 'Y'),
+               TOTAL_RIDER_PREMIUM = (SELECT NVL(SUM(NET_PREMIUM), 0) FROM T_GL_QUOTE_MEMBER_COVER WHERE GL_QUOTE_NO = :refNo AND COVER_TYPE = 'RIDER' AND IS_ACTIVE = 'Y'),
+               TOTAL_ANNUAL_PREMIUM = (SELECT NVL(SUM(NET_PREMIUM), 0) FROM T_GL_QUOTE_MEMBER_COVER WHERE GL_QUOTE_NO = :refNo AND IS_ACTIVE = 'Y'),
+               INSTALLMENT_PREMIUM = ROUND((SELECT NVL(SUM(NET_PREMIUM), 0) FROM T_GL_QUOTE_MEMBER_COVER WHERE GL_QUOTE_NO = :refNo AND IS_ACTIVE = 'Y') * :modalFactor, 2),
+               MODIFIED_BY = :appUser,
+               MODIFIED_ON = SYSDATE
+           WHERE GL_QUOTE_NO = :refNo`,
+          { refNo, modalFactor, appUser: user },
+          { autoCommit: false }
+        );
+
+        await connection.commit();
+        return (await this.findQuoteByNo(refNo))!;
+      }
+    } catch (err) {
+      if (connection) await connection.rollback();
+      throw err;
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Add EOI Document Metadata record
+   */
+  async addEoiDocument(doc: {
+    refType: 'QUOTE' | 'POLICY';
+    refNo: string;
+    memberId?: number | null;
+    empId: string;
+    docType: string;
+    fileName: string;
+    storedFileName: string;
+    mimeType?: string;
+    fileSize: number;
+    remarks?: string;
+    user: string;
+  }): Promise<GLEoiDocumentRecord> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<{ outId: number[] }>(
+        `INSERT INTO T_GL_EOI_DOCUMENT (
+          EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
+          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          IS_ACTIVE, UPLOADED_BY, UPLOADED_ON
+        ) VALUES (
+          SEQ_GL_EOI_DOC_ID.NEXTVAL, :refType, :refNo, :memberId, :empId, :docType,
+          :fileName, :storedFileName, :mimeType, :fileSize, :remarks,
+          'Y', :appUser, SYSDATE
+        ) RETURNING EOI_DOC_ID INTO :outId`,
+        {
+          refType: doc.refType,
+          refNo: doc.refNo,
+          memberId: doc.memberId || null,
+          empId: doc.empId,
+          docType: doc.docType,
+          fileName: doc.fileName,
+          storedFileName: doc.storedFileName,
+          mimeType: doc.mimeType || 'application/octet-stream',
+          fileSize: doc.fileSize,
+          remarks: doc.remarks || null,
+          appUser: doc.user,
+          outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
+        },
+        { autoCommit: true }
+      );
+      const insertedId = (res.outBinds as any)?.outId?.[0];
+      const saved = await this.getEoiDocumentById(insertedId);
+      return saved!;
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * List EOI Documents for a Quote/Policy (optionally filtered by empId)
+   */
+  async getEoiDocuments(refType: 'QUOTE' | 'POLICY', refNo: string, empId?: string): Promise<GLEoiDocumentRecord[]> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      let sql = `
+        SELECT
+          EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
+          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
+        FROM T_GL_EOI_DOCUMENT
+        WHERE REF_TYPE = :refType AND REF_NO = :refNo AND IS_ACTIVE = 'Y'
+      `;
+      const binds: any = { refType, refNo };
+      if (empId) {
+        sql += ` AND EMP_ID = :empId`;
+        binds.empId = empId;
+      }
+      sql += ` ORDER BY EOI_DOC_ID DESC`;
+      const res = await connection.execute<GLEoiDocumentRecord>(sql, binds);
+      return res.rows || [];
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Get single EOI Document by ID
+   */
+  async getEoiDocumentById(docId: number): Promise<GLEoiDocumentRecord | null> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<GLEoiDocumentRecord>(
+        `SELECT
+          EOI_DOC_ID, REF_TYPE, REF_NO, MEMBER_ID, EMP_ID, DOC_TYPE,
+          FILE_NAME, STORED_FILE_NAME, MIME_TYPE, FILE_SIZE, REMARKS,
+          IS_ACTIVE, UPLOADED_BY, TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
+         FROM T_GL_EOI_DOCUMENT
+         WHERE EOI_DOC_ID = :docId AND IS_ACTIVE = 'Y'`,
+        { docId }
+      );
+      return res.rows?.[0] || null;
+    } finally {
+      if (connection) await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Soft delete an EOI Document
+   */
+  async deleteEoiDocument(docId: number): Promise<void> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      await connection.execute(
+        `UPDATE T_GL_EOI_DOCUMENT SET IS_ACTIVE = 'N' WHERE EOI_DOC_ID = :docId`,
+        { docId },
+        { autoCommit: true }
+      );
     } finally {
       if (connection) await releaseConnection(connection);
     }

@@ -1,0 +1,106 @@
+-- ============================================================================
+-- KINS ENTERPRISE LIFE INSURANCE CORE SYSTEM
+-- MODULE: GROUP LIFE (GL) EOI (EVIDENCE OF INSURABILITY) & DOCUMENT COLLECTION
+-- Target Database: Oracle Database 19c Enterprise Edition
+-- ============================================================================
+
+-- 1. Add EOI columns to T_GL_QUOTE_MEMBER safely
+DECLARE
+  v_cnt NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_QUOTE_MEMBER' AND column_name = 'EOI_FLAG';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_QUOTE_MEMBER ADD (EOI_FLAG CHAR(1) DEFAULT ''N'' NOT NULL)';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_QUOTE_MEMBER' AND column_name = 'EOI_STATUS';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_QUOTE_MEMBER ADD (EOI_STATUS VARCHAR2(20) DEFAULT ''NOT_REQUIRED'' NOT NULL)';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_QUOTE_MEMBER' AND column_name = 'EFFECTIVE_SA';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_QUOTE_MEMBER ADD (EFFECTIVE_SA NUMBER(17,3))';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_QUOTE_MEMBER' AND column_name = 'EOI_REMARKS';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_QUOTE_MEMBER ADD (EOI_REMARKS VARCHAR2(500))';
+  END IF;
+END;
+/
+
+-- 2. Add EOI columns to T_GL_POLICY_MEMBER safely
+DECLARE
+  v_cnt NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_POLICY_MEMBER' AND column_name = 'EOI_FLAG';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_POLICY_MEMBER ADD (EOI_FLAG CHAR(1) DEFAULT ''N'' NOT NULL)';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_POLICY_MEMBER' AND column_name = 'EOI_STATUS';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_POLICY_MEMBER ADD (EOI_STATUS VARCHAR2(20) DEFAULT ''NOT_REQUIRED'' NOT NULL)';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_POLICY_MEMBER' AND column_name = 'EFFECTIVE_SA';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_POLICY_MEMBER ADD (EFFECTIVE_SA NUMBER(17,3))';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tab_columns WHERE table_name = 'T_GL_POLICY_MEMBER' AND column_name = 'EOI_REMARKS';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE T_GL_POLICY_MEMBER ADD (EOI_REMARKS VARCHAR2(500))';
+  END IF;
+END;
+/
+
+-- 3. Create Sequence & Table for EOI Documents (T_GL_EOI_DOCUMENT)
+DECLARE
+  v_cnt NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_cnt FROM user_sequences WHERE sequence_name = 'SEQ_GL_EOI_DOC_ID';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE SEQ_GL_EOI_DOC_ID START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE';
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt FROM user_tables WHERE table_name = 'T_GL_EOI_DOCUMENT';
+  IF v_cnt = 0 THEN
+    EXECUTE IMMEDIATE '
+      CREATE TABLE T_GL_EOI_DOCUMENT (
+        EOI_DOC_ID                  NUMBER(10,0)      NOT NULL,
+        REF_TYPE                    VARCHAR2(20)      NOT NULL,
+        REF_NO                      VARCHAR2(30)      NOT NULL,
+        MEMBER_ID                   NUMBER(10,0),
+        EMP_ID                      VARCHAR2(50)      NOT NULL,
+        DOC_TYPE                    VARCHAR2(50)      NOT NULL,
+        FILE_NAME                   VARCHAR2(255)     NOT NULL,
+        STORED_FILE_NAME            VARCHAR2(255)     NOT NULL,
+        MIME_TYPE                   VARCHAR2(100),
+        FILE_SIZE                   NUMBER(12,0)      DEFAULT 0,
+        REMARKS                     VARCHAR2(500),
+        IS_ACTIVE                   CHAR(1)           DEFAULT ''Y'' NOT NULL,
+        UPLOADED_BY                 VARCHAR2(50)      DEFAULT ''ADMIN'' NOT NULL,
+        UPLOADED_ON                 DATE              DEFAULT SYSDATE NOT NULL,
+        CONSTRAINT PK_T_GL_EOI_DOC PRIMARY KEY (EOI_DOC_ID),
+        CONSTRAINT CHK_GL_EOI_REFTYPE CHECK (REF_TYPE IN (''QUOTE'', ''POLICY'')),
+        CONSTRAINT CHK_GL_EOI_ACT CHECK (IS_ACTIVE IN (''Y'', ''N''))
+      )
+    ';
+    EXECUTE IMMEDIATE 'CREATE INDEX IDX_GL_EOI_REF ON T_GL_EOI_DOCUMENT (REF_TYPE, REF_NO)';
+    EXECUTE IMMEDIATE 'CREATE INDEX IDX_GL_EOI_MEM ON T_GL_EOI_DOCUMENT (REF_TYPE, REF_NO, EMP_ID)';
+  END IF;
+END;
+/
+
+-- 4. Backfill EFFECTIVE_SA for existing quote and policy members
+UPDATE T_GL_QUOTE_MEMBER m
+SET EFFECTIVE_SA = SUM_ASSURED
+WHERE EFFECTIVE_SA IS NULL;
+
+UPDATE T_GL_POLICY_MEMBER m
+SET EFFECTIVE_SA = SUM_ASSURED
+WHERE EFFECTIVE_SA IS NULL;
+
+COMMIT;

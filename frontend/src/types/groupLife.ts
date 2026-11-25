@@ -67,8 +67,12 @@ export interface GLQuoteMemberRecord {
   MONTHLY_SALARY: number;
   ANNUAL_SALARY: number;
   SUM_ASSURED: number;
+  EFFECTIVE_SA?: number;
   PREMIUM_AMOUNT: number;
   UNDERWRITING_FLAG?: string;
+  EOI_FLAG?: 'Y' | 'N';
+  EOI_STATUS?: 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  EOI_REMARKS?: string | null;
   IS_ACTIVE?: string;
   CREATED_BY?: string;
   CREATED_ON?: string;
@@ -112,11 +116,29 @@ export interface GLMemberCoverRecord {
   IS_ACTIVE?: string;
 }
 
+export interface GLEoiDocumentRecord {
+  EOI_DOC_ID: number;
+  REF_TYPE: 'QUOTE' | 'POLICY';
+  REF_NO: string;
+  MEMBER_ID?: number | null;
+  EMP_ID: string;
+  DOC_TYPE: string;
+  FILE_NAME: string;
+  STORED_FILE_NAME: string;
+  MIME_TYPE?: string | null;
+  FILE_SIZE: number;
+  REMARKS?: string | null;
+  IS_ACTIVE: string;
+  UPLOADED_BY: string;
+  UPLOADED_ON: string;
+}
+
 export interface GLQuoteDetail {
   header: GLQuoteHeaderRecord;
   members: GLQuoteMemberRecord[];
   riders: GLQuoteRiderRecord[];
   memberCovers?: GLMemberCoverRecord[];
+  eoiDocuments?: GLEoiDocumentRecord[];
 }
 
 export interface GLPolicyMasterRecord {
@@ -163,8 +185,12 @@ export interface GLPolicyMemberRecord {
   MONTHLY_SALARY: number;
   ANNUAL_SALARY: number;
   SUM_ASSURED: number;
+  EFFECTIVE_SA?: number;
   MEMBER_PREMIUM: number;
   MEMBER_STATUS: string;
+  EOI_FLAG?: 'Y' | 'N';
+  EOI_STATUS?: 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  EOI_REMARKS?: string | null;
   IS_ACTIVE: string;
   CREATED_BY: string;
   CREATED_ON: string;
@@ -187,6 +213,7 @@ export interface GLPolicyDetail {
   members: GLPolicyMemberRecord[];
   riders: GLPolicyRiderRecord[];
   memberCovers?: GLMemberCoverRecord[];
+  eoiDocuments?: GLEoiDocumentRecord[];
 }
 
 export interface SaveGLQuotePayload {
@@ -217,6 +244,8 @@ export interface SaveGLQuotePayload {
     monthlySalary?: number;
     annualSalary?: number;
     sumAssured?: number;
+    eoiFlag?: 'Y' | 'N';
+    eoiRemarks?: string;
   }>;
   riders?: Array<{
     riderCode: string;

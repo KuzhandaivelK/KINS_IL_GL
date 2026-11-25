@@ -37,4 +37,12 @@ router.get('/policies/:policyNo', groupLifeController.getPolicy);
 router.get('/policies/:policyNo/member-covers', groupLifeController.getPolicyMemberCovers);
 router.post('/policies/:policyNo/approve', groupLifeController.approvePolicy);
 
+// EOI (Evidence of Insurability) flag & document endpoints
+router.put('/policies/:policyNo/members/:memberId/eoi', groupLifeController.updatePolicyMemberEoi);
+router.put('/quotes/:quoteNo/members/:memberId/eoi', groupLifeController.updateQuoteMemberEoi);
+router.post('/eoi-documents/upload', upload.single('file'), groupLifeController.uploadEoiDocument);
+router.get('/eoi-documents', groupLifeController.listEoiDocuments);
+router.get('/eoi-documents/:docId/download', groupLifeController.downloadEoiDocument);
+router.delete('/eoi-documents/:docId', groupLifeController.deleteEoiDocument);
+
 export default router;

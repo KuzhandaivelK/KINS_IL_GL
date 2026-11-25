@@ -1,10 +1,18 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import { groupLifeRepository } from '../repositories/groupLifeRepository';
 import {
   parseMemberFileBuffer,
   generateSampleExcelBuffer,
   generateSampleCsvString
 } from '../utils/memberUploadParser';
+
+const EOI_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'eoi');
+if (!fs.existsSync(EOI_UPLOAD_DIR)) {
+  fs.mkdirSync(EOI_UPLOAD_DIR, { recursive: true });
+}
 
 export const groupLifeController = {
   /**
@@ -374,6 +382,229 @@ export const groupLifeController = {
       return res.status(500).json({
         success: false,
         message: err.message || 'Failed to fetch quote member cover-wise premiums'
+      });
+    }
+  },
+
+  /**
+   * Update EOI Flag (Y/N) for a Policy Member and recalculate cover-wise premiums
+   */
+  async updatePolicyMemberEoi(req: Request, res: Response) {
+    try {
+      const { policyNo, memberId } = req.params;
+      const { eoiFlag, eoiRemarks } = req.body;
+      const user = (req as any).user?.username || 'UNDERWRITER';
+
+      if (eoiFlag !== 'Y' && eoiFlag !== 'N') {
+        return res.status(400).json({
+          success: false,
+          message: 'eoiFlag must be "Y" or "N"'
+        });
+      }
+
+      const updated = await groupLifeRepository.updateMemberEoi(
+        'POLICY',
+        policyNo,
+        Number(memberId),
+        eoiFlag,
+        eoiRemarks,
+        user
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          eoiFlag === 'Y'
+            ? `EOI Approved: Full Sum Assured applied and cover-wise premiums recalculated for Member #${memberId}`
+            : `EOI set to No: Sum Assured capped to Free Cover Limit (FCL) and premiums recalculated`,
+        data: updated
+      });
+    } catch (err: any) {
+      console.error('Update Policy Member EOI error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to update member EOI status'
+      });
+    }
+  },
+
+  /**
+   * Update EOI Flag (Y/N) for a Quote Member and recalculate cover-wise premiums
+   */
+  async updateQuoteMemberEoi(req: Request, res: Response) {
+    try {
+      const { quoteNo, memberId } = req.params;
+      const { eoiFlag, eoiRemarks } = req.body;
+      const user = (req as any).user?.username || 'UNDERWRITER';
+
+      if (eoiFlag !== 'Y' && eoiFlag !== 'N') {
+        return res.status(400).json({
+          success: false,
+          message: 'eoiFlag must be "Y" or "N"'
+        });
+      }
+
+      const updated = await groupLifeRepository.updateMemberEoi(
+        'QUOTE',
+        quoteNo,
+        Number(memberId),
+        eoiFlag,
+        eoiRemarks,
+        user
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          eoiFlag === 'Y'
+            ? `EOI Approved: Full Sum Assured applied and cover-wise premiums recalculated`
+            : `EOI set to No: Sum Assured capped to Free Cover Limit (FCL) and premiums recalculated`,
+        data: updated
+      });
+    } catch (err: any) {
+      console.error('Update Quote Member EOI error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to update quote member EOI status'
+      });
+    }
+  },
+
+  /**
+   * Upload EOI Supporting Document (Medical Declaration, Health Questionnaire, Lab Report, etc.)
+   */
+  async uploadEoiDocument(req: Request, res: Response) {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please attach a document file to upload.'
+        });
+      }
+
+      const refType = String(req.body.refType || 'POLICY').toUpperCase() as 'QUOTE' | 'POLICY';
+      const refNo = String(req.body.refNo || '').trim();
+      const empId = String(req.body.empId || '').trim();
+      const memberId = req.body.memberId ? Number(req.body.memberId) : null;
+      const docType = String(req.body.docType || 'MEDICAL_DECLARATION').trim();
+      const remarks = req.body.remarks ? String(req.body.remarks).trim() : undefined;
+      const user = (req as any).user?.username || 'UNDERWRITER';
+
+      if (!refNo || !empId) {
+        return res.status(400).json({
+          success: false,
+          message: 'refNo (Policy/Quote No) and empId are required'
+        });
+      }
+
+      if (!fs.existsSync(EOI_UPLOAD_DIR)) {
+        fs.mkdirSync(EOI_UPLOAD_DIR, { recursive: true });
+      }
+
+      const ext = path.extname(req.file.originalname) || '';
+      const storedFileName = `EOI_${refNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${empId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const fullPath = path.join(EOI_UPLOAD_DIR, storedFileName);
+      fs.writeFileSync(fullPath, req.file.buffer);
+
+      const savedDoc = await groupLifeRepository.addEoiDocument({
+        refType,
+        refNo,
+        memberId,
+        empId,
+        docType,
+        fileName: req.file.originalname,
+        storedFileName,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        remarks,
+        user
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: `EOI document "${req.file.originalname}" uploaded successfully for ${empId}`,
+        data: savedDoc
+      });
+    } catch (err: any) {
+      console.error('Upload EOI Document error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to upload EOI document'
+      });
+    }
+  },
+
+  /**
+   * List EOI Documents for a Policy or Quote
+   */
+  async listEoiDocuments(req: Request, res: Response) {
+    try {
+      const refType = String(req.query.refType || 'POLICY').toUpperCase() as 'QUOTE' | 'POLICY';
+      const refNo = String(req.query.refNo || '').trim();
+      const empId = req.query.empId ? String(req.query.empId).trim() : undefined;
+
+      if (!refNo) {
+        return res.status(400).json({ success: false, message: 'refNo query parameter is required' });
+      }
+
+      const docs = await groupLifeRepository.getEoiDocuments(refType, refNo, empId);
+      return res.status(200).json({
+        success: true,
+        data: docs
+      });
+    } catch (err: any) {
+      console.error('List EOI Documents error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to list EOI documents'
+      });
+    }
+  },
+
+  /**
+   * Download an EOI Document
+   */
+  async downloadEoiDocument(req: Request, res: Response) {
+    try {
+      const docId = Number(req.params.docId);
+      const doc = await groupLifeRepository.getEoiDocumentById(docId);
+      if (!doc) {
+        return res.status(404).json({ success: false, message: 'EOI document not found' });
+      }
+
+      const fullPath = path.join(EOI_UPLOAD_DIR, doc.STORED_FILE_NAME);
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ success: false, message: 'Stored EOI document file not found on server' });
+      }
+
+      res.setHeader('Content-Type', doc.MIME_TYPE || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.FILE_NAME)}"`);
+      return res.sendFile(fullPath);
+    } catch (err: any) {
+      console.error('Download EOI Document error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to download EOI document'
+      });
+    }
+  },
+
+  /**
+   * Delete (soft-delete) an EOI Document
+   */
+  async deleteEoiDocument(req: Request, res: Response) {
+    try {
+      const docId = Number(req.params.docId);
+      await groupLifeRepository.deleteEoiDocument(docId);
+      return res.status(200).json({
+        success: true,
+        message: 'EOI document removed successfully'
+      });
+    } catch (err: any) {
+      console.error('Delete EOI Document error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to delete EOI document'
       });
     }
   }
