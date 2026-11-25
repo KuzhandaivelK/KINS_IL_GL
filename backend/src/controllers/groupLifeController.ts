@@ -324,5 +324,57 @@ export const groupLifeController = {
         message: err.message || 'Failed to upload members to policy'
       });
     }
+  },
+
+  /**
+   * Get Member & Cover-wise Premium Breakdown for a GL Master Policy
+   */
+  async getPolicyMemberCovers(req: Request, res: Response) {
+    try {
+      const { policyNo } = req.params;
+      const detail = await groupLifeRepository.findPolicyByNo(policyNo);
+      if (!detail) {
+        return res.status(404).json({
+          success: false,
+          message: `Group Life Master Policy ${policyNo} not found`
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: detail
+      });
+    } catch (err: any) {
+      console.error('Get GL Policy Member Covers error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to fetch policy member cover-wise premiums'
+      });
+    }
+  },
+
+  /**
+   * Get Member & Cover-wise Premium Breakdown for a GL Quote
+   */
+  async getQuoteMemberCovers(req: Request, res: Response) {
+    try {
+      const { quoteNo } = req.params;
+      const detail = await groupLifeRepository.findQuoteByNo(quoteNo);
+      if (!detail) {
+        return res.status(404).json({
+          success: false,
+          message: `Group Life Quote ${quoteNo} not found`
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: detail
+      });
+    } catch (err: any) {
+      console.error('Get GL Quote Member Covers error:', err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to fetch quote member cover-wise premiums'
+      });
+    }
   }
 };

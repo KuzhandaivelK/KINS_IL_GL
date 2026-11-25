@@ -28,11 +28,13 @@ router.post('/quotes/calculate', groupLifeController.calculateQuote);
 router.get('/quotes', groupLifeController.listQuotes);
 router.post('/quotes', groupLifeController.createQuote);
 router.get('/quotes/:quoteNo', groupLifeController.getQuote);
+router.get('/quotes/:quoteNo/member-covers', groupLifeController.getQuoteMemberCovers);
 router.post('/quotes/:quoteNo/convert', groupLifeController.convertToPolicy);
 
 // Group Life Master Policies
 router.get('/policies', groupLifeController.listPolicies);
 router.get('/policies/:policyNo', groupLifeController.getPolicy);
+router.get('/policies/:policyNo/member-covers', groupLifeController.getPolicyMemberCovers);
 router.post('/policies/:policyNo/approve', groupLifeController.approvePolicy);
 
 export default router;

@@ -53,6 +53,7 @@ import {
 } from '../types/groupLife';
 import { ProductItem } from '../types/product';
 import { CoverListItem } from '../types/cover';
+import { GroupLifeMemberPremiums } from '../components/GroupLifeMemberPremiums';
 
 const SAMPLE_MEMBERS = [
   { empId: 'EMP-1001', memberName: 'Ahmed Al-Harthy', dob: '1979-04-15', gender: 'M' as const, category: 'Executive', monthlySalary: 4500 },
@@ -67,7 +68,8 @@ export const GroupLifePage: React.FC = () => {
   const { user } = useAuth();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'quotes' | 'wizard' | 'policies' | 'schedule'>('quotes');
+  const [activeTab, setActiveTab] = useState<'quotes' | 'wizard' | 'policies' | 'member-premiums' | 'schedule'>('quotes');
+  const [memberPremSource, setMemberPremSource] = useState<{ type: 'policy' | 'quote'; refNo?: string }>({ type: 'policy' });
 
   // Loading & error states
   const [loading, setLoading] = useState<boolean>(false);
@@ -698,6 +700,18 @@ export const GroupLifePage: React.FC = () => {
           </span>
         </button>
 
+        <button
+          onClick={() => setActiveTab('member-premiums')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'member-premiums'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-teal-700 hover:bg-slate-50'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Member &amp; Cover Premiums</span>
+        </button>
+
         {(selectedPolicy || selectedQuote) && (
           <button
             onClick={() => setActiveTab('schedule')}
@@ -828,6 +842,18 @@ export const GroupLifePage: React.FC = () => {
                             title="View Quote Schedule"
                           >
                             <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMemberPremSource({ type: 'quote', refNo: q.GL_QUOTE_NO });
+                              setActiveTab('member-premiums');
+                            }}
+                            className="p-1.5 rounded-lg border border-teal-200 bg-teal-50/70 text-teal-700 hover:bg-teal-100 transition-colors"
+                            title="Member & Cover-wise Premium Breakdown"
+                          >
+                            <Layers className="w-3.5 h-3.5" />
                           </button>
 
                           {q.STATUS !== 'CONVERTED' && (
@@ -1739,6 +1765,19 @@ export const GroupLifePage: React.FC = () => {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMemberPremSource({ type: 'policy', refNo: p.MASTER_POLICY_NO });
+                              setActiveTab('member-premiums');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-teal-200 bg-teal-50 text-teal-700 font-bold text-[11px] hover:bg-teal-100 transition-colors"
+                            title="View Member & Cover-wise Premiums"
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>Cover Premiums</span>
+                          </button>
+
                           {p.POL_STATUS === 'PENDING_APPROVAL' && (
                             <button
                               type="button"
@@ -1759,6 +1798,18 @@ export const GroupLifePage: React.FC = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: MEMBER-WISE & COVER-WISE PREMIUM BREAKDOWN */}
+      {/* ========================================================================= */}
+      {activeTab === 'member-premiums' && (
+        <GroupLifeMemberPremiums
+          policies={policies}
+          quotes={quotes}
+          initialSourceType={memberPremSource.type}
+          initialSourceNo={memberPremSource.refNo}
+        />
       )}
 
       {/* ========================================================================= */}

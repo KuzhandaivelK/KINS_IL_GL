@@ -89,10 +89,36 @@ export interface GLQuoteRiderRecord {
   CREATED_ON?: string;
 }
 
+export interface GLMemberCoverRecord {
+  MEM_COVER_ID?: number;
+  POL_MEM_COVER_ID?: number;
+  GL_QUOTE_NO?: string;
+  MASTER_POLICY_NO?: string;
+  MEMBER_ID?: number;
+  EMP_ID: string;
+  MEMBER_NAME?: string;
+  AGE?: number;
+  GENDER?: string;
+  CATEGORY?: string;
+  COVER_CODE: string;
+  COVER_NAME: string;
+  COVER_TYPE: 'BASIC' | 'RIDER';
+  SA_PERCENT: number;
+  COVER_SUM_ASSURED: number;
+  RATE_PER_MILLE: number;
+  GROSS_PREMIUM: number;
+  DISCOUNT_AMOUNT: number;
+  NET_PREMIUM: number;
+  IS_ACTIVE?: string;
+  CREATED_BY?: string;
+  CREATED_ON?: string;
+}
+
 export interface GLQuoteDetail {
   header: GLQuoteHeaderRecord;
   members: GLQuoteMemberRecord[];
   riders: GLQuoteRiderRecord[];
+  memberCovers?: GLMemberCoverRecord[];
 }
 
 export interface GLPolicyMasterRecord {
@@ -162,6 +188,7 @@ export interface GLPolicyDetail {
   master: GLPolicyMasterRecord;
   members: GLPolicyMemberRecord[];
   riders: GLPolicyRiderRecord[];
+  memberCovers?: GLMemberCoverRecord[];
 }
 
 export interface SaveGLQuotePayload {

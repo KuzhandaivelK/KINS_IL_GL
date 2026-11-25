@@ -267,5 +267,39 @@ export const groupLifeService = {
       throw new Error(data.message || 'Failed to upload members to policy');
     }
     return data.data;
+  },
+
+  /**
+   * Fetch Member & Cover-wise Premium Breakdown for a Master Policy
+   */
+  async getPolicyMemberCovers(policyNo: string): Promise<GLPolicyDetail> {
+    const res = await fetch(`${API_BASE_URL}/policies/${encodeURIComponent(policyNo)}/member-covers`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to fetch policy member cover-wise premiums');
+    }
+    return data.data;
+  },
+
+  /**
+   * Fetch Member & Cover-wise Premium Breakdown for a Quote
+   */
+  async getQuoteMemberCovers(quoteNo: string): Promise<GLQuoteDetail> {
+    const res = await fetch(`${API_BASE_URL}/quotes/${encodeURIComponent(quoteNo)}/member-covers`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to fetch quote member cover-wise premiums');
+    }
+    return data.data;
   }
 };
