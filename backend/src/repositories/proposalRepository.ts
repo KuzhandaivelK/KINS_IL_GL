@@ -1332,5 +1332,176 @@ export const proposalRepository = {
     } finally {
       await releaseConnection(connection);
     }
+  },
+
+  /**
+   * Fetch all active Individual Life Medical Grid rules (Age Band x Sum Assured Band)
+   */
+  async getMedicalGridRules(): Promise<Array<{
+    GRID_ID: number;
+    AGE_FROM: number;
+    AGE_TO: number;
+    SA_FROM: number;
+    SA_TO: number;
+    MEDICAL_CODE: string;
+    MEDICAL_CATEGORY: string;
+    REQUIRED_TESTS: string;
+    IS_MEDICAL_REQUIRED: 'Y' | 'N';
+  }>> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<any>(
+        `SELECT GRID_ID, AGE_FROM, AGE_TO, SA_FROM, SA_TO, MEDICAL_CODE, MEDICAL_CATEGORY, REQUIRED_TESTS, IS_MEDICAL_REQUIRED
+         FROM MTBL_IL_MEDICAL_GRID
+         WHERE IS_ACTIVE = 'Y'
+         ORDER BY AGE_FROM ASC, SA_FROM ASC`,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      return res.rows || [];
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Read Individual Life Medical Document Storage Path from STBL_SYS_PARAM (SYS_PARAM_DESC)
+   */
+  async getMedicalDocStoragePath(): Promise<string | null> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<{ SYS_PARAM_DESC: string | null }>(
+        `SELECT SYS_PARAM_DESC
+         FROM STBL_SYS_PARAM
+         WHERE SYS_PARAM_CODE = 'IL_MED_DOC_PATH'
+           AND SYS_SUB_PARAM = 'MED_UPLOAD'`,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const val = res.rows?.[0]?.SYS_PARAM_DESC;
+      return val && val.trim() ? val.trim() : null;
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * List Medical Exam Documents for a Proposal
+   */
+  async getMedicalDocuments(propNo: string): Promise<any[]> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<any>(
+        `SELECT
+           MED_DOC_ID, PROP_NO, TEST_NAME, FILE_NAME, STORED_FILE_NAME, FILE_PATH,
+           MIME_TYPE, FILE_SIZE, TO_CHAR(EXAM_DATE, 'YYYY-MM-DD') AS EXAM_DATE,
+           CLINIC_NAME, REMARKS, IS_ACTIVE, UPLOADED_BY,
+           TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
+         FROM T_PROPOSAL_MEDICAL_DOC
+         WHERE PROP_NO = :propNo AND IS_ACTIVE = 'Y'
+         ORDER BY MED_DOC_ID DESC`,
+        { propNo },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      return res.rows || [];
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Get single Medical Document by ID
+   */
+  async getMedicalDocumentById(docId: number): Promise<any | null> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<any>(
+        `SELECT
+           MED_DOC_ID, PROP_NO, TEST_NAME, FILE_NAME, STORED_FILE_NAME, FILE_PATH,
+           MIME_TYPE, FILE_SIZE, TO_CHAR(EXAM_DATE, 'YYYY-MM-DD') AS EXAM_DATE,
+           CLINIC_NAME, REMARKS, IS_ACTIVE, UPLOADED_BY,
+           TO_CHAR(UPLOADED_ON, 'YYYY-MM-DD HH24:MI:SS') AS UPLOADED_ON
+         FROM T_PROPOSAL_MEDICAL_DOC
+         WHERE MED_DOC_ID = :docId AND IS_ACTIVE = 'Y'`,
+        { docId },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      return res.rows?.[0] || null;
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Insert Medical Document metadata (including actual FILE_PATH) into T_PROPOSAL_MEDICAL_DOC
+   */
+  async addMedicalDocument(doc: {
+    propNo: string;
+    testName: string;
+    fileName: string;
+    storedFileName: string;
+    filePath: string;
+    mimeType?: string;
+    fileSize: number;
+    examDate?: string;
+    clinicName?: string;
+    remarks?: string;
+    user: string;
+  }): Promise<any> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      const res = await connection.execute<{ outId: number[] }>(
+        `INSERT INTO T_PROPOSAL_MEDICAL_DOC (
+           MED_DOC_ID, PROP_NO, TEST_NAME, FILE_NAME, STORED_FILE_NAME, FILE_PATH,
+           MIME_TYPE, FILE_SIZE, EXAM_DATE, CLINIC_NAME, REMARKS,
+           IS_ACTIVE, UPLOADED_BY, UPLOADED_ON
+         ) VALUES (
+           SEQ_PROP_MED_DOC_ID.NEXTVAL, :propNo, :testName, :fileName, :storedFileName, :filePath,
+           :mimeType, :fileSize, ${doc.examDate ? "TO_DATE(:examDate, 'YYYY-MM-DD')" : 'NULL'}, :clinicName, :remarks,
+           'Y', :appUser, SYSDATE
+         ) RETURNING MED_DOC_ID INTO :outId`,
+        {
+          propNo: doc.propNo,
+          testName: doc.testName,
+          fileName: doc.fileName,
+          storedFileName: doc.storedFileName,
+          filePath: doc.filePath,
+          mimeType: doc.mimeType || 'application/octet-stream',
+          fileSize: doc.fileSize,
+          ...(doc.examDate ? { examDate: doc.examDate } : {}),
+          clinicName: doc.clinicName || null,
+          remarks: doc.remarks || null,
+          appUser: doc.user,
+          outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
+        },
+        { autoCommit: true }
+      );
+      const insertedId = (res.outBinds as any)?.outId?.[0];
+      return await this.getMedicalDocumentById(insertedId);
+    } finally {
+      await releaseConnection(connection);
+    }
+  },
+
+  /**
+   * Soft-delete a Medical Document
+   */
+  async deleteMedicalDocument(docId: number): Promise<void> {
+    let connection: oracledb.Connection | null = null;
+    try {
+      connection = await getConnection();
+      await connection.execute(
+        `UPDATE T_PROPOSAL_MEDICAL_DOC SET IS_ACTIVE = 'N' WHERE MED_DOC_ID = :docId`,
+        { docId },
+        { autoCommit: true }
+      );
+    } finally {
+      await releaseConnection(connection);
+    }
   }
 };

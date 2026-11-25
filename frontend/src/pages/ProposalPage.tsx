@@ -57,6 +57,7 @@ import {
 } from '../types/proposal';
 import { ProductItem } from '../types/product';
 import { CoverListItem } from '../types/cover';
+import { ProposalMedicalGridStep } from '../components/ProposalMedicalGridStep';
 
 const STATUS_BADGES: Record<ProposalStatus, { bg: string; text: string; border: string }> = {
   DRAFT: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
@@ -73,10 +74,11 @@ const STEPS = [
   { id: 2, title: 'Life Assured', subtitle: 'Personal & Health', icon: User },
   { id: 3, title: 'Rider Covers', subtitle: 'Optional Benefits', icon: ShieldCheck },
   { id: 4, title: 'Discounts & Loadings', subtitle: 'Underwriting Adjustments', icon: Percent },
-  { id: 5, title: 'Beneficiaries', subtitle: 'Nominees & Shares', icon: Users },
-  { id: 6, title: 'Exclusions', subtitle: 'Policy Clauses', icon: ShieldAlert },
-  { id: 7, title: 'Premium Summary', subtitle: 'PKG_TARIFF Calculation', icon: Calculator },
-  { id: 8, title: 'Workflow & UW', subtitle: 'Approvals & Audit', icon: FileCheck2 }
+  { id: 5, title: 'Medical Grid', subtitle: 'Exam & Docs', icon: HeartPulse },
+  { id: 6, title: 'Beneficiaries', subtitle: 'Nominees & Shares', icon: Users },
+  { id: 7, title: 'Exclusions', subtitle: 'Policy Clauses', icon: ShieldAlert },
+  { id: 8, title: 'Premium Summary', subtitle: 'PKG_TARIFF Calculation', icon: Calculator },
+  { id: 9, title: 'Workflow & UW', subtitle: 'Approvals & Audit', icon: FileCheck2 }
 ];
 
 const emptyFormData: ProposalFormData = {
@@ -929,7 +931,7 @@ export const ProposalPage: React.FC = () => {
                                 </button>
                               )}
                               <button
-                                onClick={() => handleOpenEdit(p.PROP_NO, 8)}
+                                onClick={() => handleOpenEdit(p.PROP_NO, 9)}
                                 className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                                 title="Underwriting Assessment & Workflow"
                               >
@@ -1064,7 +1066,7 @@ export const ProposalPage: React.FC = () => {
 
           {/* Stepper Content Panels */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-6">
-            <fieldset disabled={isReadOnly && currentStep < 8} className="contents disabled:opacity-85">
+            <fieldset disabled={isReadOnly && currentStep < 9} className="contents disabled:opacity-85">
             {/* ------------------------------------------------------------- */}
             {/* STEP 1: Plan & Product Information */}
             {/* ------------------------------------------------------------- */}
@@ -1747,9 +1749,23 @@ export const ProposalPage: React.FC = () => {
             )}
 
             {/* ------------------------------------------------------------- */}
-            {/* STEP 5: Beneficiaries & Nominees */}
+            {/* STEP 5: Medical Grid & Examination Document Upload */}
             {/* ------------------------------------------------------------- */}
             {currentStep === 5 && (
+              <ProposalMedicalGridStep
+                propNo={editingPropNo || proposalDetail?.info.PROP_NO || null}
+                age={Number(formData.assured.PAS_AGE || 30)}
+                sumAssured={Number(formData.info.PROP_SUM_ASSURED || 0)}
+                smokerYn={formData.assured.PAS_SMOKER_YN || 'N'}
+                isReadOnly={isReadOnly}
+                onSaveDraftFirst={handleSaveProposal}
+              />
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* STEP 6: Beneficiaries & Nominees */}
+            {/* ------------------------------------------------------------- */}
+            {currentStep === 6 && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
                   <div className="flex items-center gap-3">
@@ -1757,7 +1773,7 @@ export const ProposalPage: React.FC = () => {
                       <Users className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-gray-900">Step 5: Beneficiaries & Nominees</h2>
+                      <h2 className="text-lg font-bold text-gray-900">Step 6: Beneficiaries & Nominees</h2>
                       <p className="text-xs text-gray-500">Nominate primary beneficiaries, allocation shares (must sum to 100%), and minor guardians</p>
                     </div>
                   </div>
@@ -1882,9 +1898,9 @@ export const ProposalPage: React.FC = () => {
           )}
 
             {/* ------------------------------------------------------------- */}
-            {/* STEP 6: Policy Exclusions */}
+            {/* STEP 7: Policy Exclusions */}
             {/* ------------------------------------------------------------- */}
-            {currentStep === 6 && (
+            {currentStep === 7 && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
                   <div className="flex items-center gap-3">
@@ -1892,7 +1908,7 @@ export const ProposalPage: React.FC = () => {
                       <ShieldAlert className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-gray-900">Step 6: Policy Exclusions & Specific Endorsements</h2>
+                      <h2 className="text-lg font-bold text-gray-900">Step 7: Policy Exclusions & Specific Endorsements</h2>
                       <p className="text-xs text-gray-500">Statutory and underwriting risk exclusions applied to this policy</p>
                     </div>
                   </div>
@@ -1941,9 +1957,9 @@ export const ProposalPage: React.FC = () => {
             )}
 
             {/* ------------------------------------------------------------- */}
-            {/* STEP 7: Premium Calculation & PKG_TARIFF Integration */}
+            {/* STEP 8: Premium Calculation & PKG_TARIFF Integration */}
             {/* ------------------------------------------------------------- */}
-            {currentStep === 7 && (
+            {currentStep === 8 && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
                   <div className="flex items-center gap-3">
@@ -1951,7 +1967,7 @@ export const ProposalPage: React.FC = () => {
                       <Calculator className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-gray-900">Step 7: Premium Summary & Database PKG_TARIFF Engine</h2>
+                      <h2 className="text-lg font-bold text-gray-900">Step 8: Premium Summary & Database PKG_TARIFF Engine</h2>
                       <p className="text-xs text-gray-500">Calculate actuarial mortality rates dynamically via Oracle Package PKG_TARIFF</p>
                     </div>
                   </div>
@@ -2059,16 +2075,16 @@ export const ProposalPage: React.FC = () => {
             </fieldset>
 
             {/* ------------------------------------------------------------- */}
-            {/* STEP 8: Underwriting Assessment & Workflow Integration */}
+            {/* STEP 9: Underwriting Assessment & Workflow Integration */}
             {/* ------------------------------------------------------------- */}
-            {currentStep === 8 && (
+            {currentStep === 9 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
                   <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
                     <FileCheck2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-gray-900">Step 8: Underwriting & Multi-Tier Workflow</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Step 9: Underwriting & Multi-Tier Workflow</h2>
                     <p className="text-xs text-gray-500">
                       Sequential approval gates (Maker &rarr; Supervisor Review &rarr; Junior Underwriter &rarr; Board Committee)
                     </p>
@@ -2415,10 +2431,10 @@ export const ProposalPage: React.FC = () => {
                 </button>
               )}
 
-              {currentStep < 8 ? (
+              {currentStep < 9 ? (
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(prev => Math.min(8, prev + 1))}
+                  onClick={() => setCurrentStep(prev => Math.min(9, prev + 1))}
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
                 >
                   <span>Next Step</span>

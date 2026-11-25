@@ -1,6 +1,20 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { proposalRepository } from '../repositories/proposalRepository';
+
+const DEFAULT_IL_MED_DIR = path.resolve(process.cwd(), 'uploads', 'il_medical');
+
+async function resolveIlMedicalUploadDir(): Promise<string> {
+  const configuredPath = await proposalRepository.getMedicalDocStoragePath();
+  const targetDir = configuredPath ? path.resolve(configuredPath) : DEFAULT_IL_MED_DIR;
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  return targetDir;
+}
 
 const assuredInputSchema = z.object({
   PAS_NAME: z.string().min(1, 'Life Assured name is required').max(150),
@@ -363,6 +377,184 @@ export const proposalController = {
         success: false,
         message: error.message || 'Failed to process workflow action',
         error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/proposals/medical-grid?age=30&sumAssured=1000000
+   * Returns all Age Band x Sum Assured Band rules + the matched rule for given age & SA
+   */
+  async getMedicalGrid(req: Request, res: Response): Promise<void> {
+    try {
+      const grid = await proposalRepository.getMedicalGridRules();
+      const ageParam = req.query.age !== undefined ? Number(req.query.age) : null;
+      const saParam = req.query.sumAssured !== undefined ? Number(req.query.sumAssured) : null;
+
+      let matchedRule = null;
+      if (ageParam !== null && saParam !== null && !isNaN(ageParam) && !isNaN(saParam)) {
+        matchedRule =
+          grid.find(
+            (r) =>
+              ageParam >= Number(r.AGE_FROM) &&
+              ageParam <= Number(r.AGE_TO) &&
+              saParam >= Number(r.SA_FROM) &&
+              saParam <= Number(r.SA_TO)
+          ) || null;
+
+        // Edge fallback: if age < 18, use youngest band; if age > 75, use oldest band
+        if (!matchedRule && grid.length > 0) {
+          const clampedAge = Math.max(18, Math.min(75, ageParam));
+          matchedRule =
+            grid.find(
+              (r) =>
+                clampedAge >= Number(r.AGE_FROM) &&
+                clampedAge <= Number(r.AGE_TO) &&
+                saParam >= Number(r.SA_FROM) &&
+                saParam <= Number(r.SA_TO)
+            ) || grid[grid.length - 1];
+        }
+      }
+
+      res.json({
+        success: true,
+        grid,
+        matchedRule
+      });
+    } catch (error: any) {
+      console.error('Error in getMedicalGrid:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to fetch medical grid'
+      });
+    }
+  },
+
+  /**
+   * GET /api/proposals/:id/medical-docs
+   */
+  async getMedicalDocuments(req: Request, res: Response): Promise<void> {
+    try {
+      const propNo = req.params.id.trim();
+      const documents = await proposalRepository.getMedicalDocuments(propNo);
+      res.json({
+        success: true,
+        documents
+      });
+    } catch (error: any) {
+      console.error('Error in getMedicalDocuments:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to fetch proposal medical documents'
+      });
+    }
+  },
+
+  /**
+   * POST /api/proposals/:id/medical-docs/upload
+   */
+  async uploadMedicalDocument(req: Request, res: Response): Promise<void> {
+    try {
+      const propNo = req.params.id.trim();
+      if (!req.file || !req.file.buffer) {
+        res.status(400).json({
+          success: false,
+          message: 'Please attach a medical examination document file.'
+        });
+        return;
+      }
+
+      const testName = String(req.body.testName || 'Medical Examination Report (MER)').trim();
+      const examDate = req.body.examDate ? String(req.body.examDate).trim() : undefined;
+      const clinicName = req.body.clinicName ? String(req.body.clinicName).trim() : undefined;
+      const remarks = req.body.remarks ? String(req.body.remarks).trim() : undefined;
+      const user = (req as any).user?.userId || (req as any).user?.USR_ID || 'ADMIN';
+
+      const targetDir = await resolveIlMedicalUploadDir();
+      const ext = path.extname(req.file.originalname) || '';
+      const storedFileName = `MED_${propNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const fullPath = path.join(targetDir, storedFileName);
+      fs.writeFileSync(fullPath, req.file.buffer);
+
+      const savedDoc = await proposalRepository.addMedicalDocument({
+        propNo,
+        testName,
+        fileName: req.file.originalname,
+        storedFileName,
+        filePath: fullPath,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        examDate,
+        clinicName,
+        remarks,
+        user
+      });
+
+      res.status(201).json({
+        success: true,
+        message: `Medical document "${req.file.originalname}" uploaded successfully.`,
+        document: savedDoc
+      });
+    } catch (error: any) {
+      console.error('Error in uploadMedicalDocument:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to upload medical document'
+      });
+    }
+  },
+
+  /**
+   * GET /api/proposals/medical-docs/:docId/download
+   */
+  async downloadMedicalDocument(req: Request, res: Response): Promise<void> {
+    try {
+      const docId = Number(req.params.docId);
+      const doc = await proposalRepository.getMedicalDocumentById(docId);
+      if (!doc) {
+        res.status(404).json({ success: false, message: 'Medical document not found' });
+        return;
+      }
+
+      const fallbackDir = await resolveIlMedicalUploadDir();
+      const fullPath =
+        doc.FILE_PATH && doc.FILE_PATH.trim()
+          ? doc.FILE_PATH.trim()
+          : path.join(fallbackDir, doc.STORED_FILE_NAME);
+
+      if (!fs.existsSync(fullPath)) {
+        res.status(404).json({ success: false, message: 'Stored medical document file not found on server' });
+        return;
+      }
+
+      res.setHeader('Content-Type', doc.MIME_TYPE || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.FILE_NAME)}"`);
+      res.sendFile(fullPath);
+    } catch (error: any) {
+      console.error('Error in downloadMedicalDocument:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to download medical document'
+      });
+    }
+  },
+
+  /**
+   * DELETE /api/proposals/medical-docs/:docId
+   */
+  async deleteMedicalDocument(req: Request, res: Response): Promise<void> {
+    try {
+      const docId = Number(req.params.docId);
+      await proposalRepository.deleteMedicalDocument(docId);
+      res.json({
+        success: true,
+        message: 'Medical document removed successfully.'
+      });
+    } catch (error: any) {
+      console.error('Error in deleteMedicalDocument:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to delete medical document'
       });
     }
   }

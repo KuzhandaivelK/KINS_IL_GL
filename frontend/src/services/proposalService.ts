@@ -4,7 +4,9 @@ import {
   ProposalFormData,
   TariffRateCalculationResult,
   PaymentFrequency,
-  MopCodeOption
+  MopCodeOption,
+  MedicalGridRule,
+  ProposalMedicalDocument
 } from '../types/proposal';
 
 const API_BASE_URL = '/api/proposals';
@@ -188,6 +190,127 @@ export const proposalService = {
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.message || 'Failed to process workflow action');
+    }
+    return data;
+  },
+
+  /**
+   * Fetch Individual Life Medical Grid rules & evaluate matched rule for Age + Sum Assured
+   */
+  async getMedicalGrid(
+    age?: number,
+    sumAssured?: number
+  ): Promise<{ success: boolean; grid: MedicalGridRule[]; matchedRule: MedicalGridRule | null }> {
+    const params = new URLSearchParams();
+    if (age !== undefined && !isNaN(age)) params.append('age', String(age));
+    if (sumAssured !== undefined && !isNaN(sumAssured)) params.append('sumAssured', String(sumAssured));
+    const qStr = params.toString() ? `?${params.toString()}` : '';
+
+    const res = await fetch(`${API_BASE_URL}/medical-grid${qStr}`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to load medical grid');
+    }
+    return data;
+  },
+
+  /**
+   * Fetch uploaded Medical Examination documents for a Proposal
+   */
+  async getMedicalDocuments(propNo: string): Promise<{ success: boolean; documents: ProposalMedicalDocument[] }> {
+    const res = await fetch(`${API_BASE_URL}/${encodeURIComponent(propNo)}/medical-docs`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to load proposal medical documents');
+    }
+    return data;
+  },
+
+  /**
+   * Upload Medical Examination document for a Proposal
+   */
+  async uploadMedicalDocument(
+    propNo: string,
+    params: {
+      file: File;
+      testName: string;
+      examDate?: string;
+      clinicName?: string;
+      remarks?: string;
+    }
+  ): Promise<{ success: boolean; message: string; document: ProposalMedicalDocument }> {
+    const formData = new FormData();
+    formData.append('file', params.file);
+    formData.append('testName', params.testName);
+    if (params.examDate) formData.append('examDate', params.examDate);
+    if (params.clinicName) formData.append('clinicName', params.clinicName);
+    if (params.remarks) formData.append('remarks', params.remarks);
+
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/${encodeURIComponent(propNo)}/medical-docs/upload`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to upload medical document');
+    }
+    return data;
+  },
+
+  /**
+   * Download a Medical Examination document
+   */
+  async downloadMedicalDocument(docId: number, fileName: string): Promise<void> {
+    const token = localStorage.getItem('kins_auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/medical-docs/${docId}/download`, {
+      method: 'GET',
+      headers,
+      credentials: 'include'
+    });
+    if (!res.ok) {
+      throw new Error('Failed to download medical document');
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  /**
+   * Delete a Medical Examination document
+   */
+  async deleteMedicalDocument(docId: number): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE_URL}/medical-docs/${docId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to delete medical document');
     }
     return data;
   }

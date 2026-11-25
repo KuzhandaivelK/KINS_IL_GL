@@ -195,3 +195,32 @@ export interface MopCodeOption {
   codeSubCode: string;
   codeSubCodeDesc: string;
 }
+
+export interface MedicalGridRule {
+  GRID_ID: number;
+  AGE_FROM: number;
+  AGE_TO: number;
+  SA_FROM: number;
+  SA_TO: number;
+  MEDICAL_CODE: string;
+  MEDICAL_CATEGORY: string;
+  REQUIRED_TESTS: string;
+  IS_MEDICAL_REQUIRED: 'Y' | 'N';
+}
+
+export interface ProposalMedicalDocument {
+  MED_DOC_ID: number;
+  PROP_NO: string;
+  TEST_NAME: string;
+  FILE_NAME: string;
+  STORED_FILE_NAME: string;
+  FILE_PATH: string;
+  MIME_TYPE?: string | null;
+  FILE_SIZE: number;
+  EXAM_DATE?: string | null;
+  CLINIC_NAME?: string | null;
+  REMARKS?: string | null;
+  IS_ACTIVE: string;
+  UPLOADED_BY: string;
+  UPLOADED_ON: string;
+}
