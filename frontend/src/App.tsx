@@ -20,6 +20,7 @@ import { ProposalPage } from './pages/ProposalPage';
 import { PolicyPage } from './pages/PolicyPage';
 import { PolicyServicingPage } from './pages/PolicyServicingPage';
 import { WorkbasketPage } from './pages/WorkbasketPage';
+import { ClaimsPage } from './pages/ClaimsPage';
 
 export const App: React.FC = () => {
   return (
@@ -53,7 +54,7 @@ export const App: React.FC = () => {
             <Route path="/underwriting" element={<PlaceholderModulePage />} />
             <Route path="/premium-collection" element={<PolicyServicingPage />} />
             <Route path="/policy-servicing" element={<PolicyServicingPage />} />
-            <Route path="/claims-management" element={<PlaceholderModulePage />} />
+            <Route path="/claims-management" element={<ClaimsPage />} />
             <Route path="/commission-management" element={<PlaceholderModulePage />} />
             <Route path="/reinsurance" element={<PlaceholderModulePage />} />
             <Route path="/reports" element={<PlaceholderModulePage />} />
