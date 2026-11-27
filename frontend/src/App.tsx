@@ -22,6 +22,7 @@ import { PolicyServicingPage } from './pages/PolicyServicingPage';
 import { WorkbasketPage } from './pages/WorkbasketPage';
 import { ClaimsPage } from './pages/ClaimsPage';
 import { ReinsurancePage } from './pages/ReinsurancePage';
+import { TreatySetupPage } from './pages/TreatySetupPage';
 
 export const App: React.FC = () => {
   return (
@@ -65,6 +66,7 @@ export const App: React.FC = () => {
             <Route path="/administration/customers" element={<CustomersPage />} />
             <Route path="/administration/rating" element={<TariffRatesPage />} />
             <Route path="/administration/workflow" element={<WorkflowPage />} />
+            <Route path="/administration/treaty-setup" element={<TreatySetupPage />} />
           </Route>
 
           {/* Root Redirect to /dashboard (which redirects to /login if unauthenticated) */}
