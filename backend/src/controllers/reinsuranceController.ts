@@ -63,7 +63,13 @@ export const reinsuranceController = {
       });
     } catch (err: any) {
       console.error('Allocate Policy RI error:', err);
-      return res.status(500).json({ success: false, message: err.message || 'Failed to allocate policy RI' });
+      const isAlreadyApproved = err?.errorNum === 20403 || String(err?.message || '').includes('ORA-20403');
+      return res.status(isAlreadyApproved ? 400 : 500).json({
+        success: false,
+        message: isAlreadyApproved
+          ? `Policy ${req.body?.polNo || ''} already has an APPROVED RI Allocation. Re-allocation is not permitted.`
+          : err.message || 'Failed to allocate policy RI'
+      });
     }
   },
 

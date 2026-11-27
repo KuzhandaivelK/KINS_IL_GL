@@ -236,7 +236,7 @@ export const reinsuranceRepository = {
    * List eligible policies (both IL and GL) for RI Allocation dropdown
    */
   async listEligiblePolicies(): Promise<
-    Array<{ polNo: string; lobType: 'IL' | 'GL'; insuredName: string; prodCode: string; sumAssured: number; annualPremium: number; status: string }>
+    Array<{ polNo: string; lobType: 'IL' | 'GL'; insuredName: string; prodCode: string; sumAssured: number; annualPremium: number; status: string; hasApprovedRi: boolean }>
   > {
     let connection: oracledb.Connection | null = null;
     try {
@@ -247,7 +247,8 @@ export const reinsuranceRepository = {
              p.POL_NO, 'IL' AS LOB_TYPE, NVL(a.PAS_NAME, 'Policyholder') AS INSURED_NAME,
              p.POL_PROD_CODE AS PROD_CODE, NVL(p.POL_SUM_ASSURED, 0) AS SUM_ASSURED,
              NVL(s.PPS_NET_ANNUAL_PREM, NVL(s.PPS_TOTAL_PAYABLE, 0)) AS ANNUAL_PREMIUM,
-             p.POL_STATUS AS STATUS
+             p.POL_STATUS AS STATUS,
+             (SELECT COUNT(1) FROM T_RI_POLICY_ALLOCATION ra WHERE ra.POL_NO = p.POL_NO AND ra.ALLOC_STATUS = 'APPROVED' AND ra.IS_ACTIVE = 'Y') AS APPROVED_RI_CNT
            FROM T_POLICY_INFO p
            LEFT JOIN T_POLICY_ASSURED a ON a.POL_NO = p.POL_NO
            LEFT JOIN T_POLICY_PREMIUM_SUMMARY s ON s.POL_NO = p.POL_NO
@@ -257,13 +258,14 @@ export const reinsuranceRepository = {
         ),
         connection.execute<any>(
           `SELECT
-             MASTER_POLICY_NO AS POL_NO, 'GL' AS LOB_TYPE, CORP_NAME AS INSURED_NAME,
-             PROD_CODE, NVL(TOTAL_INFORCE_SA, 0) AS SUM_ASSURED,
-             NVL(TOTAL_INFORCE_PREMIUM, 0) AS ANNUAL_PREMIUM,
-             POL_STATUS AS STATUS
-           FROM T_GL_POLICY_MASTER
-           WHERE IS_ACTIVE = 'Y'
-           ORDER BY GL_POL_ID DESC`,
+             m.MASTER_POLICY_NO AS POL_NO, 'GL' AS LOB_TYPE, m.CORP_NAME AS INSURED_NAME,
+             m.PROD_CODE, NVL(m.TOTAL_INFORCE_SA, 0) AS SUM_ASSURED,
+             NVL(m.TOTAL_INFORCE_PREMIUM, 0) AS ANNUAL_PREMIUM,
+             m.POL_STATUS AS STATUS,
+             (SELECT COUNT(1) FROM T_RI_POLICY_ALLOCATION ra WHERE ra.POL_NO = m.MASTER_POLICY_NO AND ra.ALLOC_STATUS = 'APPROVED' AND ra.IS_ACTIVE = 'Y') AS APPROVED_RI_CNT
+           FROM T_GL_POLICY_MASTER m
+           WHERE m.IS_ACTIVE = 'Y'
+           ORDER BY m.GL_POL_ID DESC`,
           {},
           { outFormat: oracledb.OUT_FORMAT_OBJECT }
         )
@@ -276,7 +278,8 @@ export const reinsuranceRepository = {
         prodCode: r.PROD_CODE,
         sumAssured: Number(r.SUM_ASSURED || 0),
         annualPremium: Number(r.ANNUAL_PREMIUM || 0),
-        status: r.STATUS
+        status: r.STATUS,
+        hasApprovedRi: Number(r.APPROVED_RI_CNT || 0) > 0
       }));
     } finally {
       await releaseConnection(connection);

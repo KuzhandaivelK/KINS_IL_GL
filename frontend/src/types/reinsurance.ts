@@ -101,4 +101,5 @@ export interface EligiblePolicyForRi {
   sumAssured: number;
   annualPremium: number;
   status: string;
+  hasApprovedRi?: boolean;
 }

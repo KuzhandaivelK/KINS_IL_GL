@@ -82,9 +82,21 @@ CREATE OR REPLACE PACKAGE BODY PKG_REINSURANCE AS
     v_tot_net_ceded   NUMBER := 0;
     v_max_order       NUMBER := 0;
     v_alloc_id        NUMBER;
+    v_approved_cnt    NUMBER := 0;
   BEGIN
     IF NVL(p_policy_sa, 0) <= 0 THEN
       RAISE_APPLICATION_ERROR(-20401, 'Policy Sum Assured must be greater than zero for RI allocation.');
+    END IF;
+
+    -- Prevent re-allocation if an APPROVED RI allocation already exists for this policy
+    SELECT COUNT(1) INTO v_approved_cnt
+    FROM T_RI_POLICY_ALLOCATION
+    WHERE POL_NO = p_pol_no
+      AND ALLOC_STATUS = 'APPROVED'
+      AND IS_ACTIVE = 'Y';
+
+    IF v_approved_cnt > 0 THEN
+      RAISE_APPLICATION_ERROR(-20403, 'Policy ' || p_pol_no || ' already has an APPROVED RI Allocation. Re-allocation is not permitted.');
     END IF;
 
     SELECT TREATY_CODE INTO v_treaty_code

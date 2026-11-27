@@ -105,10 +105,19 @@ export const ReinsurancePage: React.FC = () => {
     }
   };
 
+  const selectedPolicyObj = useMemo(
+    () => eligiblePolicies.find((p) => p.polNo === selectedPolNo) || null,
+    [eligiblePolicies, selectedPolNo]
+  );
+
   const handleRunAllocation = async () => {
-    const pol = eligiblePolicies.find((p) => p.polNo === selectedPolNo);
+    const pol = selectedPolicyObj;
     if (!pol || !selectedTreatyId) {
       setError('Please select a Policy and an Active Treaty.');
+      return;
+    }
+    if (pol.hasApprovedRi) {
+      setError(`Policy ${pol.polNo} already has an APPROVED RI Allocation. Re-allocation is not permitted.`);
       return;
     }
     setActionLoading(true);
@@ -332,6 +341,7 @@ export const ReinsurancePage: React.FC = () => {
                   {eligiblePolicies.map((p) => (
                     <option key={p.polNo} value={p.polNo}>
                       [{p.lobType}] {p.polNo} — {p.insuredName} (SA: {p.sumAssured.toLocaleString('en-US')})
+                      {p.hasApprovedRi ? ' [RI APPROVED — Locked]' : ''}
                     </option>
                   ))}
                 </select>
@@ -354,14 +364,26 @@ export const ReinsurancePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleRunAllocation}
-                  disabled={actionLoading || !selectedPolNo || !selectedTreatyId}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-xs disabled:opacity-50"
+                  disabled={actionLoading || !selectedPolNo || !selectedTreatyId || !!selectedPolicyObj?.hasApprovedRi}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Calculator className="w-4 h-4" />
-                  <span>{actionLoading ? 'Allocating...' : 'Calculate & Store Policy RI Allocation'}</span>
+                  <span>
+                    {selectedPolicyObj?.hasApprovedRi
+                      ? 'Already RI Approved (Locked)'
+                      : actionLoading
+                      ? 'Allocating...'
+                      : 'Calculate & Store Policy RI Allocation'}
+                  </span>
                 </button>
               </div>
             </div>
+            {selectedPolicyObj?.hasApprovedRi && (
+              <p className="text-[11px] font-semibold text-amber-700 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>Policy {selectedPolicyObj.polNo} already has an approved RI allocation and cannot be re-allocated.</span>
+              </p>
+            )}
           </div>
 
           {/* Allocations Register Table */}
