@@ -21,6 +21,7 @@ import { PolicyPage } from './pages/PolicyPage';
 import { PolicyServicingPage } from './pages/PolicyServicingPage';
 import { WorkbasketPage } from './pages/WorkbasketPage';
 import { ClaimsPage } from './pages/ClaimsPage';
+import { ReinsurancePage } from './pages/ReinsurancePage';
 
 export const App: React.FC = () => {
   return (
@@ -56,7 +57,7 @@ export const App: React.FC = () => {
             <Route path="/policy-servicing" element={<PolicyServicingPage />} />
             <Route path="/claims-management" element={<ClaimsPage />} />
             <Route path="/commission-management" element={<PlaceholderModulePage />} />
-            <Route path="/reinsurance" element={<PlaceholderModulePage />} />
+            <Route path="/reinsurance" element={<ReinsurancePage />} />
             <Route path="/reports" element={<PlaceholderModulePage />} />
             <Route path="/administration" element={<PlaceholderModulePage />} />
             <Route path="/administration/users" element={<UsersPage />} />

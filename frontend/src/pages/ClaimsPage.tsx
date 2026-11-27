@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileWarning,
   Plus,
@@ -54,6 +54,8 @@ const CLAIM_DOC_TYPES = [
 
 export const ClaimsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromWorkbasket = searchParams.get('from') === 'workbasket';
 
   // Page modes
   const [viewMode, setViewMode] = useState<'list' | 'fnol' | 'detail'>('list');
@@ -149,6 +151,14 @@ export const ClaimsPage: React.FC = () => {
   useEffect(() => {
     if (viewMode === 'list') loadClaims();
   }, [statusFilter, lobFilter, searchQuery, viewMode]);
+
+  // Auto-open specific claim when redirected from Workbasket (?claimNo=...&from=workbasket)
+  useEffect(() => {
+    const claimNoParam = searchParams.get('claimNo');
+    if (claimNoParam && claimNoParam !== selectedClaim?.master.CLAIM_NO) {
+      handleOpenClaim(claimNoParam);
+    }
+  }, [searchParams]);
 
   const syncFormsFromDetail = (detail: ClaimDetail) => {
     const m = detail.master;
@@ -403,19 +413,32 @@ export const ClaimsPage: React.FC = () => {
 
         <div className="flex items-center gap-2 self-start sm:self-center">
           {viewMode !== 'list' ? (
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode('list');
-                setSelectedClaim(null);
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Claims Register</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {fromWorkbasket && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/workbasket')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Workbasket</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchParams({});
+                  setViewMode('list');
+                  setSelectedClaim(null);
+                  setError(null);
+                  setSuccessMsg(null);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Claims Register</span>
+              </button>
+            </div>
           ) : (
             <>
               <button

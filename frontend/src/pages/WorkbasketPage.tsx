@@ -33,7 +33,7 @@ export const WorkbasketPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Filters & Search
-  const [activeTab, setActiveTab] = useState<'ALL' | 'PROPOSAL' | 'POLICY' | 'HIGH_VALUE'>('ALL');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'PROPOSAL' | 'POLICY' | 'CLAIM' | 'REINSURANCE' | 'HIGH_VALUE'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const loadWorkbasket = async () => {
@@ -62,6 +62,8 @@ export const WorkbasketPage: React.FC = () => {
       // Tab filter
       if (activeTab === 'PROPOSAL' && item.type !== 'PROPOSAL') return false;
       if (activeTab === 'POLICY' && item.type !== 'POLICY') return false;
+      if (activeTab === 'CLAIM' && item.type !== 'CLAIM') return false;
+      if (activeTab === 'REINSURANCE' && item.type !== 'REINSURANCE') return false;
       if (activeTab === 'HIGH_VALUE' && item.priority !== 'HIGH') return false;
 
       // Search filter
@@ -202,6 +204,26 @@ export const WorkbasketPage: React.FC = () => {
               Policies ({data?.policiesCount ?? 0})
             </button>
             <button
+              onClick={() => setActiveTab('CLAIM')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'CLAIM'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Claims ({data?.claimsCount ?? 0})
+            </button>
+            <button
+              onClick={() => setActiveTab('REINSURANCE')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'REINSURANCE'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Reinsurance ({data?.reinsuranceCount ?? 0})
+            </button>
+            <button
               onClick={() => setActiveTab('HIGH_VALUE')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'HIGH_VALUE'
@@ -338,6 +360,10 @@ export const WorkbasketPage: React.FC = () => {
                         navigate(`/individual-life/proposal?propNo=${encodeURIComponent(item.refNo)}&step=${targetStep}&from=workbasket`);
                       } else if (item.type === 'POLICY') {
                         navigate(`/policy-administration?policyNo=${encodeURIComponent(item.refNo)}&from=workbasket`);
+                      } else if (item.type === 'CLAIM') {
+                        navigate(`/claims-management?claimNo=${encodeURIComponent(item.refNo)}&from=workbasket`);
+                      } else if (item.type === 'REINSURANCE') {
+                        navigate(`/reinsurance?allocNo=${encodeURIComponent(item.refNo)}&from=workbasket`);
                       } else {
                         navigate(item.navigationUrl);
                       }

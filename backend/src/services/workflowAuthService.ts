@@ -26,7 +26,7 @@ export interface UserGroupInfo {
 
 export interface WorkbasketItem {
   id: string;
-  type: 'PROPOSAL' | 'POLICY' | 'CLAIM' | 'SERVICING';
+  type: 'PROPOSAL' | 'POLICY' | 'CLAIM' | 'REINSURANCE' | 'SERVICING';
   refNo: string;
   customerName: string;
   productName: string;
@@ -48,6 +48,8 @@ export interface WorkbasketSummary {
   totalPending: number;
   proposalsCount: number;
   policiesCount: number;
+  claimsCount: number;
+  reinsuranceCount: number;
   highPriorityCount: number;
   items: WorkbasketItem[];
 }
@@ -470,8 +472,105 @@ export const workflowAuthService = {
         }
       }
 
+      // 3. Fetch Pending Claims for CLAIMUSER or ADMIN
+      if (group === 'CLAIMUSER' || group === 'ADMIN') {
+        try {
+          const clmSql = `
+            SELECT
+              c.CLAIM_NO, c.POL_NO, c.LOB_TYPE, c.INSURED_NAME, c.PROD_CODE,
+              c.CLAIM_TYPE, c.CLAIMED_AMOUNT, c.CLAIM_STATUS,
+              TO_CHAR(c.CREATED_ON, 'YYYY-MM-DD HH24:MI') AS CREATED_ON,
+              NVL(a.NET_PAYABLE_AMOUNT, c.CLAIMED_AMOUNT) AS PAYABLE_AMT
+            FROM T_CLAIM_MASTER c
+            LEFT JOIN T_CLAIM_ASSESSMENT a ON a.CLAIM_NO = c.CLAIM_NO
+            WHERE c.IS_ACTIVE = 'Y'
+              AND c.CLAIM_STATUS IN ('FNOL_REGISTERED', 'UNDER_ASSESSMENT', 'ASSESSED', 'APPROVED')
+            ORDER BY c.CLAIM_ID DESC
+          `;
+          const clmRes = await connection.execute<any>(clmSql, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+          for (const row of clmRes.rows || []) {
+            const st = row.CLAIM_STATUS;
+            const stageName =
+              st === 'FNOL_REGISTERED'
+                ? 'FNOL Registered'
+                : st === 'UNDER_ASSESSMENT'
+                ? 'Under Claim Assessment'
+                : st === 'ASSESSED'
+                ? 'Assessed — Pending Approval'
+                : 'Approved — Pending Settlement';
+            const requiredAction =
+              st === 'FNOL_REGISTERED' || st === 'UNDER_ASSESSMENT'
+                ? 'Assess Claim & Compute Net Payable'
+                : st === 'ASSESSED'
+                ? 'Approve / Reject Claim'
+                : 'Settle Claim & Post GL Voucher';
+            const amt = Number(row.CLAIMED_AMOUNT || 0);
+            items.push({
+              id: `CLM_${row.CLAIM_NO}`,
+              type: 'CLAIM',
+              refNo: row.CLAIM_NO,
+              customerName: row.INSURED_NAME || 'Insured',
+              productName: `${row.POL_NO} (${row.CLAIM_TYPE})`,
+              planType: row.LOB_TYPE === 'GL' ? 'GROUP LIFE' : 'INDIVIDUAL LIFE',
+              amount: amt,
+              totalPayable: Number(row.PAYABLE_AMT || 0),
+              status: st,
+              stageName,
+              requiredAction,
+              targetGroup: 'CLAIMUSER',
+              priority: amt >= 100000 ? 'HIGH' : 'NORMAL',
+              createdOn: row.CREATED_ON || '',
+              navigationUrl: `/claims-management?claimNo=${encodeURIComponent(row.CLAIM_NO)}&from=workbasket`
+            });
+          }
+        } catch (clmErr) {
+          console.warn('Claims workbasket query skipped:', clmErr);
+        }
+      }
+
+      // 4. Fetch Pending Reinsurance Allocations for RIUSER or ADMIN
+      if (group === 'RIUSER' || group === 'ADMIN') {
+        try {
+          const riSql = `
+            SELECT
+              ALLOC_NO, POL_NO, LOB_TYPE, TREATY_CODE, INSURED_NAME, PROD_CODE,
+              CEDED_SA, NET_CEDED_PREMIUM, ALLOC_STATUS,
+              TO_CHAR(CREATED_ON, 'YYYY-MM-DD HH24:MI') AS CREATED_ON
+            FROM T_RI_POLICY_ALLOCATION
+            WHERE IS_ACTIVE = 'Y'
+              AND ALLOC_STATUS = 'PENDING_RI_APPROVAL'
+            ORDER BY ALLOC_ID DESC
+          `;
+          const riRes = await connection.execute<any>(riSql, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+          for (const row of riRes.rows || []) {
+            const cededSa = Number(row.CEDED_SA || 0);
+            items.push({
+              id: `RI_${row.ALLOC_NO}`,
+              type: 'REINSURANCE',
+              refNo: row.ALLOC_NO,
+              customerName: row.INSURED_NAME || row.POL_NO,
+              productName: `${row.POL_NO} — ${row.TREATY_CODE}`,
+              planType: row.LOB_TYPE === 'GL' ? 'GROUP LIFE RI' : 'INDIVIDUAL LIFE RI',
+              amount: cededSa,
+              totalPayable: Number(row.NET_CEDED_PREMIUM || 0),
+              status: row.ALLOC_STATUS,
+              stageName: 'RI Cession Authorization',
+              requiredAction: 'Approve RI Allocation & Post GL',
+              targetGroup: 'RIUSER',
+              priority: cededSa >= 500000 ? 'HIGH' : 'NORMAL',
+              createdOn: row.CREATED_ON || '',
+              navigationUrl: `/reinsurance?allocNo=${encodeURIComponent(row.ALLOC_NO)}&from=workbasket`
+            });
+          }
+        } catch (riErr) {
+          console.warn('Reinsurance workbasket query skipped:', riErr);
+        }
+      }
+
       const proposalsCount = items.filter(i => i.type === 'PROPOSAL').length;
       const policiesCount = items.filter(i => i.type === 'POLICY').length;
+      const claimsCount = items.filter(i => i.type === 'CLAIM').length;
+      const reinsuranceCount = items.filter(i => i.type === 'REINSURANCE').length;
       const highPriorityCount = items.filter(i => i.priority === 'HIGH').length;
 
       return {
@@ -479,6 +578,8 @@ export const workflowAuthService = {
         totalPending: items.length,
         proposalsCount,
         policiesCount,
+        claimsCount,
+        reinsuranceCount,
         highPriorityCount,
         items
       };

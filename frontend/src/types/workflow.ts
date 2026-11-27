@@ -77,7 +77,7 @@ export interface WorkflowPermissionResult {
 
 export interface WorkbasketItem {
   id: string;
-  type: 'PROPOSAL' | 'POLICY' | 'CLAIM' | 'SERVICING';
+  type: 'PROPOSAL' | 'POLICY' | 'CLAIM' | 'REINSURANCE' | 'SERVICING';
   refNo: string;
   customerName: string;
   productName: string;
@@ -99,6 +99,8 @@ export interface WorkbasketSummary {
   totalPending: number;
   proposalsCount: number;
   policiesCount: number;
+  claimsCount?: number;
+  reinsuranceCount?: number;
   highPriorityCount: number;
   items: WorkbasketItem[];
 }
