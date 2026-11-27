@@ -420,13 +420,13 @@ export const workflowAuthService = {
             priority: sa >= 1000000 ? 'HIGH' : sa >= 500000 ? 'MEDIUM' : 'NORMAL',
             createdOn: row.CREATED_ON || '',
             fprStatus: row.FPR_STATUS || 'PENDING',
-            navigationUrl: `/proposals?propNo=${row.PROP_NO}`
+            navigationUrl: `/individual-life/proposal?propNo=${encodeURIComponent(row.PROP_NO)}&step=${st === 'REWORK' || st === 'DRAFT' ? 1 : 9}&from=workbasket`
           });
         }
       }
 
-      // 2. Fetch Policies awaiting approval (POLICY_ADMIN or ADMIN)
-      if (group === 'POLICY_ADMIN' || group === 'ADMIN') {
+      // 2. Fetch Policies awaiting approval (UWMGR, POLICY_ADMIN or ADMIN)
+      if (group === 'UWMGR' || group === 'POLICY_ADMIN' || group === 'ADMIN') {
         const polSql = `
           SELECT 
             p.POL_NO,
@@ -465,7 +465,7 @@ export const workflowAuthService = {
             targetGroup: 'POLICY_ADMIN',
             priority: sa >= 1000000 ? 'HIGH' : 'NORMAL',
             createdOn: row.CREATED_ON || '',
-            navigationUrl: `/policies?polNo=${row.POL_NO}`
+            navigationUrl: `/policy-administration?policyNo=${encodeURIComponent(row.POL_NO)}&from=workbasket`
           });
         }
       }

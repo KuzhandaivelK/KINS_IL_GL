@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/AuthContext';
 import {
   FileText,
@@ -143,6 +143,8 @@ const emptyFormData: ProposalFormData = {
 
 export const ProposalPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromWorkbasket = searchParams.get('from') === 'workbasket';
   const { user } = useAuth();
   const userGroup = (user?.userGroup || 'ADMIN').toUpperCase();
   const isDEUser = userGroup === 'DEUSER' || userGroup === 'ADMIN';
@@ -252,6 +254,16 @@ export const ProposalPage: React.FC = () => {
       loadProposals();
     }
   }, [statusFilter, searchTerm, pageMode]);
+
+  // Auto-open a specific proposal when redirected from Workbasket or deep-link (?propNo=...&step=9)
+  useEffect(() => {
+    const propNoParam = searchParams.get('propNo');
+    if (propNoParam && propNoParam !== editingPropNo) {
+      const stepParam = Number(searchParams.get('step'));
+      const targetStep = !isNaN(stepParam) && stepParam >= 1 && stepParam <= 9 ? stepParam : 9;
+      handleOpenEdit(propNoParam, targetStep);
+    }
+  }, [searchParams]);
 
   // Statistics
   const metrics = useMemo(() => {
@@ -664,9 +676,21 @@ export const ProposalPage: React.FC = () => {
           </div>
         ) : (
           <div className="flex items-center gap-3">
+            {fromWorkbasket && (
+              <button
+                type="button"
+                onClick={() => navigate('/workbasket')}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg font-semibold transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Workbasket</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
+                setSearchParams({});
+                setEditingPropNo(null);
                 setPageMode('list');
                 setFeedback(null);
               }}

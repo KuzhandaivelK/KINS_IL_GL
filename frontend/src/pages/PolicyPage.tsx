@@ -54,7 +54,8 @@ const STATUS_BADGES: Record<PolicyStatus, { bg: string; text: string; border: st
 };
 
 export const PolicyPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromWorkbasket = searchParams.get('from') === 'workbasket';
   const navigate = useNavigate();
   const { user } = useAuth();
   const userGroup = (user?.userGroup || 'ADMIN').toUpperCase();
@@ -166,10 +167,10 @@ export const PolicyPage: React.FC = () => {
     }
   }, [statusFilter, searchTerm, viewMode]);
 
-  // Handle URL param for auto-opening a policy if requested
+  // Handle URL param for auto-opening a policy if requested (supports ?policyNo= or ?polNo=)
   useEffect(() => {
-    const policyNoParam = searchParams.get('policyNo');
-    if (policyNoParam) {
+    const policyNoParam = searchParams.get('policyNo') || searchParams.get('polNo');
+    if (policyNoParam && policyNoParam !== selectedPolNo) {
       handleOpenDetail(policyNoParam);
     }
   }, [searchParams]);
@@ -413,10 +414,22 @@ export const PolicyPage: React.FC = () => {
 
         {/* Global Navigation actions */}
         <div className="flex items-center gap-3">
+          {fromWorkbasket && (
+            <button
+              type="button"
+              onClick={() => navigate('/workbasket')}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Workbasket</span>
+            </button>
+          )}
           {viewMode !== 'list' && (
             <button
               type="button"
               onClick={() => {
+                setSearchParams({});
+                setSelectedPolNo(null);
                 setViewMode('list');
                 loadPolicies();
               }}

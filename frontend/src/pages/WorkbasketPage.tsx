@@ -332,7 +332,16 @@ export const WorkbasketPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => navigate(item.navigationUrl)}
+                    onClick={() => {
+                      if (item.type === 'PROPOSAL') {
+                        const targetStep = item.status === 'REWORK' || item.status === 'DRAFT' ? 1 : 9;
+                        navigate(`/individual-life/proposal?propNo=${encodeURIComponent(item.refNo)}&step=${targetStep}&from=workbasket`);
+                      } else if (item.type === 'POLICY') {
+                        navigate(`/policy-administration?policyNo=${encodeURIComponent(item.refNo)}&from=workbasket`);
+                      } else {
+                        navigate(item.navigationUrl);
+                      }
+                    }}
                     className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:scale-[1.02] active:scale-95 whitespace-nowrap"
                   >
                     <span>Open & Act</span>
