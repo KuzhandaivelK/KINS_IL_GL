@@ -23,6 +23,8 @@ import { WorkbasketPage } from './pages/WorkbasketPage';
 import { ClaimsPage } from './pages/ClaimsPage';
 import { ReinsurancePage } from './pages/ReinsurancePage';
 import { TreatySetupPage } from './pages/TreatySetupPage';
+import { CommissionDefinitionPage } from './pages/CommissionDefinitionPage';
+import { PolicyCommissionPage } from './pages/PolicyCommissionPage';
 
 export const App: React.FC = () => {
   return (
@@ -57,7 +59,9 @@ export const App: React.FC = () => {
             <Route path="/premium-collection" element={<PolicyServicingPage />} />
             <Route path="/policy-servicing" element={<PolicyServicingPage />} />
             <Route path="/claims-management" element={<ClaimsPage />} />
-            <Route path="/commission-management" element={<PlaceholderModulePage />} />
+            <Route path="/commission-management" element={<Navigate to="/commission-management/policy-commission" replace />} />
+            <Route path="/commission-management/definition" element={<CommissionDefinitionPage />} />
+            <Route path="/commission-management/policy-commission" element={<PolicyCommissionPage />} />
             <Route path="/reinsurance" element={<ReinsurancePage />} />
             <Route path="/reports" element={<PlaceholderModulePage />} />
             <Route path="/administration" element={<PlaceholderModulePage />} />

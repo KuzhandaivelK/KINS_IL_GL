@@ -19,6 +19,7 @@ import policyServicingRoutes from './routes/policyServicingRoutes';
 import endorsementRoutes from './routes/endorsementRoutes';
 import claimRoutes from './routes/claimRoutes';
 import reinsuranceRoutes from './routes/reinsuranceRoutes';
+import commissionRoutes from './routes/commissionRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/policy-servicing', policyServicingRoutes);
 app.use('/api/endorsements', endorsementRoutes);
 app.use('/api/claims', claimRoutes);
 app.use('/api/reinsurance', reinsuranceRoutes);
+app.use('/api/commissions', commissionRoutes);
 
 // Centralized error handling
 app.use(errorHandler);
